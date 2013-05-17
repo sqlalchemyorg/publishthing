@@ -41,24 +41,28 @@ def blogofile_build(checkout):
     check_call(["blogofile", "build"])
     return os.path.join(checkout, "_site")
 
-def publish_local(copy_from, sitename, local_base, local_prefix):
+def publish_local(copy_from, sitename, local_base, local_prefix, dry):
     site_location = os.path.join(local_base, sitename)
     if not os.path.exists(site_location):
         raise Exception("No such site: %s" % site_location)
 
     dest = os.path.join(site_location, local_prefix)
-    print "Copying %s to %s" % (
+    print "%sCopying %s to %s" % (
+                "(dry) " if dry else "",
                 copy_from,
                 dest
             )
-    check_call(["bash", "-c", "cp -R %s/* %s" % (copy_from, dest)])
+    if not dry:
+        check_call(["bash", "-c", "cp -R %s/* %s" % (copy_from, dest)])
 
-def publish_s3(copy_from, sitename):
-    print "Publishing %s to S3 bucket %s" % (
+def publish_s3(copy_from, sitename, dry):
+    print "%sPublishing %s to S3 bucket %s" % (
+               "(dry) " if dry else "",
                copy_from,
                sitename
           )
-    check_call(["bash", "-c",
+    if not dry:
+        check_call(["bash", "-c",
             "s3vcp %s %s /" % (sitename, copy_from)])
 
 def main(argv=None):
@@ -73,6 +77,7 @@ def main(argv=None):
                             help="Path prefix inside of a local site location")
     parser.add_argument("--repo-prefix", type=str,
                             help="Optional path prefix inside the repo itself")
+    parser.add_argument("--dry", action="store_true", help="Don't actually publish")
     parser.add_argument("source", type=str, help="Source repository path")
     parser.add_argument("destination", choices=["local", "s3"], help="Destination")
     args = parser.parse_args(argv)
@@ -102,9 +107,9 @@ def main(argv=None):
         copy_from = checkout
 
     if args.destination == "local":
-        publish_local(copy_from, sitename, args.local_base, args.local_prefix)
+        publish_local(copy_from, sitename, args.local_base, args.local_prefix, args.dry)
     elif args.destination == "s3":
-        publish_s3(copy_from, sitename)
+        publish_s3(copy_from, sitename, args.dry)
 
 if __name__ == '__main__':
     main()
