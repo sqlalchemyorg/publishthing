@@ -33,6 +33,7 @@ def hg_checkout_files(repo, work_dir, sitename):
         os.chdir(checkout)
         log("Updating %s", checkout)
         check_call(["hg", "pull"])
+        check_call(["hg", "up"])
     return checkout
 
 def blogofile_build(checkout):
