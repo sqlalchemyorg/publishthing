@@ -37,6 +37,7 @@ def hg_checkout_files(repo, work_dir, sitename):
 
 def blogofile_build(checkout):
     log("building with blogofile")
+    log("base dir %s", checkout)
     os.chdir(checkout)
     check_call(["blogofile", "build"])
     return os.path.join(checkout, "_site")
