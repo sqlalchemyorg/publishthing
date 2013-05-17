@@ -62,15 +62,13 @@ def main(argv=None):
     parser.add_argument("destination", choices=["local", "s3"], help="Destination")
     args = parser.parse_args(argv)
 
-    here = os.path.dirname(sys.argv[0])
-
     repo = os.path.abspath(args.source)
     sitename = os.path.basename(repo)
     if sitename.endswith(".git"):
         sitename = sitename[0:-4]
     log("Site name %s", sitename)
 
-    work_dir = os.path.join(here, "work")
+    work_dir = os.path.join(os.path.dirname(repo), "work")
     if not os.path.exists(work_dir):
         log("creating work directory %s", work_dir)
         os.mkdir(work_dir)
