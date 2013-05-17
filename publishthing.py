@@ -22,6 +22,19 @@ def git_checkout_files(repo, work_dir, sitename):
         check_call(["git", "pull"])
     return checkout
 
+def hg_checkout_files(repo, work_dir, sitename):
+    checkout = os.path.join(work_dir, sitename)
+    if not os.path.exists(checkout):
+        os.chdir(work_dir)
+        log("Cloning %s into %s", repo, os.path.join(work_dir, sitename))
+        check_call(["hg", "clone", repo, sitename])
+        os.chdir(checkout)
+    else:
+        os.chdir(checkout)
+        log("Updating %s", checkout)
+        check_call(["hg", "pull"])
+    return checkout
+
 def blogofile_build(checkout):
     log("building with blogofile")
     os.chdir(checkout)
@@ -74,7 +87,7 @@ def main(argv=None):
         os.mkdir(work_dir)
 
     if args.type == 'hg':
-        raise NotImplementedError("mercurial not suppported")
+        checkout = hg_checkout_files(repo, work_dir, sitename)
     elif args.type == 'git':
         checkout = git_checkout_files(repo, work_dir, sitename)
 
