@@ -71,6 +71,8 @@ def main(argv=None):
                             help="Full path to local directory for sites")
     parser.add_argument("--local-prefix", type=str,
                             help="Path prefix inside of a local site location")
+    parser.add_argument("--repo-prefix", type=str,
+                            help="Optional path prefix inside the repo itself")
     parser.add_argument("source", type=str, help="Source repository path")
     parser.add_argument("destination", choices=["local", "s3"], help="Destination")
     args = parser.parse_args(argv)
@@ -90,6 +92,9 @@ def main(argv=None):
         checkout = hg_checkout_files(repo, work_dir, sitename)
     elif args.type == 'git':
         checkout = git_checkout_files(repo, work_dir, sitename)
+
+    if args.repo_prefix:
+        checkout = os.path.join(checkout, args.repo_prefix)
 
     if args.blogofile:
         copy_from = blogofile_build(checkout)
