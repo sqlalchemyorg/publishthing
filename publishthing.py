@@ -4,7 +4,6 @@ import os
 import sys
 from subprocess import check_call
 
-
 def log(msg, *args):
     print(msg % args)
 
@@ -49,20 +48,18 @@ def publish_local(copy_from, sitename, local_base, local_prefix, dry):
         raise Exception("No such site: %s" % site_location)
 
     dest = os.path.join(site_location, local_prefix)
-    print "%sCopying %s to %s" % (
+    log("%sCopying %s to %s",
                 "(dry) " if dry else "",
                 copy_from,
-                dest
-            )
+                dest)
     if not dry:
         check_call(["bash", "-c", "cp -R %s/* %s" % (copy_from, dest)])
 
 def publish_s3(copy_from, sitename, dry):
-    print "%sPublishing %s to S3 bucket %s" % (
+    log("%sPublishing %s to S3 bucket %s",
                "(dry) " if dry else "",
                copy_from,
-               sitename
-          )
+               sitename)
     if not dry:
         check_call(["bash", "-c",
             "s3vcp %s %s /" % (sitename, copy_from)])
@@ -109,7 +106,8 @@ def main(argv=None):
         copy_from = checkout
 
     if args.destination == "local":
-        publish_local(copy_from, sitename, args.local_base, args.local_prefix, args.dry)
+        publish_local(copy_from, sitename, args.local_base,
+                                args.local_prefix, args.dry)
     elif args.destination == "s3":
         publish_s3(copy_from, sitename, args.dry)
 
