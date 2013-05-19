@@ -6,24 +6,29 @@ See https://confluence.atlassian.com/display/BITBUCKET/POST+Service+Management
 
 e.g.::
 
-myfile.wsgi:
+### myfile.wsgi ###
 
 from publishthing import dvcs_hooks
 
 mapping = {
-    "/username/reponame/":(
+    "/bitbucket_username/bitbucket_reponame/":(
         "/path/to/your/repo.git",
-        "bitbucket"
+        "origin"
     )
 }
 
-application = dvcs_hooks.bitbucket
+application = dvcs_hooks.bitbucket(mapping)
 
-# then set up a URL:
+#####
+
+### then set up a URL to point to the .wsgi file:
 
 http://mysite.com/bitbucket_hook
 
-and set up POST in bitbucket.
+then set up POST in bitbucket to refer to this URL.
+
+When bitbucket posts to that URL, you'll get "cd <path_to_repo>; git fetch origin"
+to keep it up to date.
 
 """
 
