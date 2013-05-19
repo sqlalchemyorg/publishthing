@@ -17,6 +17,6 @@ setup(name='publishthing',
       packages=["publishthing"],
       zip_safe=False,
       entry_points={
-        'console_scripts': ['publishthing = publishthing:main'],
+        'console_scripts': ['publishthing = publishthing.publishthing:main'],
       }
 )
