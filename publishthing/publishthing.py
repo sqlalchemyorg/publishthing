@@ -1,39 +1,9 @@
 #!/usr/bin/python
 import argparse
 import os
-import sys
 from subprocess import check_call
+from core import log, git_checkout_files, hg_checkout_files
 
-def log(msg, *args):
-    print(msg % args)
-
-def git_checkout_files(repo, work_dir, sitename):
-    os.environ.pop('GIT_DIR', None)
-    checkout = os.path.join(work_dir, sitename)
-    if not os.path.exists(checkout):
-        os.chdir(work_dir)
-        log("Cloning %s into %s", repo, os.path.join(work_dir, sitename))
-        check_call(["git", "clone", repo, sitename])
-        os.chdir(checkout)
-    else:
-        os.chdir(checkout)
-        log("Updating %s", checkout)
-        check_call(["git", "pull"])
-    return checkout
-
-def hg_checkout_files(repo, work_dir, sitename):
-    checkout = os.path.join(work_dir, sitename)
-    if not os.path.exists(checkout):
-        os.chdir(work_dir)
-        log("Cloning %s into %s", repo, os.path.join(work_dir, sitename))
-        check_call(["hg", "clone", repo, sitename])
-        os.chdir(checkout)
-    else:
-        os.chdir(checkout)
-        log("Updating %s", checkout)
-        check_call(["hg", "pull"])
-        check_call(["hg", "up"])
-    return checkout
 
 def blogofile_build(checkout):
     log("building with blogofile")

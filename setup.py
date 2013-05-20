@@ -18,6 +18,9 @@ setup(name='publishthing',
       zip_safe=False,
       install_requires=['webob', "s3vcp"],
       entry_points={
-        'console_scripts': ['publishthing = publishthing.publishthing:main'],
+        'console_scripts': [
+            'publishthing = publishthing.publishthing:main',
+            'update_all_dvcs = publishthing.update_all:main',
+        ],
       }
 )

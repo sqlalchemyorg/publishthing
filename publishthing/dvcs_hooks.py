@@ -35,7 +35,7 @@ to keep it up to date.   This assumes the repo is a --mirror repo.
 from webob import Request, Response
 import json
 import os
-from subprocess import check_call
+from core import update_git_mirror
 
 
 def bitbucket(mapping):
@@ -53,8 +53,7 @@ def bitbucket(mapping):
             repo = message['repository']['absolute_url']
             if repo in mapping and message['repository']['scm'] == 'git':
                 path, origin = mapping[repo]
-                os.chdir(path)
-                check_call(["git", "remote", "update", "--prune", origin])
+                update_git_mirror(path, origin)
 
         res.body = "OK"
         return res(environ, start_response)
