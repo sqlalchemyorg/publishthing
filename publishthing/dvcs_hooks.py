@@ -54,7 +54,7 @@ def bitbucket(mapping):
             if repo in mapping and message['repository']['scm'] == 'git':
                 path, origin = mapping[repo]
                 os.chdir(path)
-                check_call(["git", "remote", "update", origin])
+                check_call(["git", "remote", "update", "--prune", origin])
 
         res.body = "OK"
         return res(environ, start_response)
