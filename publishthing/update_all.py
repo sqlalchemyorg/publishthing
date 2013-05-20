@@ -1,8 +1,8 @@
 """Update every DVCS in a directory.
 """
 import os
-from core import update_git_mirror, is_git
-
+from core import update_git_mirror, is_git, log
+import argparse
 
 def main(argv=None):
     parser = argparse.ArgumentParser()
