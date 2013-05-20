@@ -11,8 +11,9 @@ def main(argv=None):
             help="Directory containing repositories.")
     args = parser.parse_args(argv)
 
-    for dirname in os.listdir(args.path):
-        fullpath = os.path.join(args.path, dirname)
+    basepath = os.path.abspath(args.path)
+    for dirname in os.listdir(basepath):
+        fullpath = os.path.join(basepath, dirname)
         if is_git(fullpath):
             log("Updating git repo: %s", dirname)
             update_git_mirror(fullpath, "origin")
