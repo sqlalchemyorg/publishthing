@@ -1,5 +1,5 @@
 import os
-from subprocess import check_call
+from subprocess import check_call, CalledProcessError
 import sys
 import contextlib
 
@@ -10,6 +10,12 @@ def update_git_mirror(path, origin):
     with chdir_as(path):
         check_call(["git", "remote", "update", "--prune", origin])
 
+
+def update_hg_mirror(path):
+    """Update an hg repo
+    """
+    with chdir_as(path):
+        check_call(["hg", "pull"])
 
 @contextlib.contextmanager
 def chdir_as(path):
@@ -54,6 +60,10 @@ def is_git(path):
             os.path.exists(os.path.join(path, "hooks")) and
             os.path.exists(os.path.join(path, "refs"))
         )
+
+def is_hg(path):
+    return os.path.exists(os.path.join(path, ".hg")) or \
+            os.path.exists(os.path.join(path, "hgrc"))
 
 def log(msg, *args):
     print(msg % args)

@@ -1,7 +1,8 @@
 """Update every DVCS in a directory.
 """
 import os
-from core import update_git_mirror, is_git, log
+from core import update_git_mirror, is_git, log, \
+        CalledProcessError, is_hg, update_hg_mirror
 import argparse
 
 def main(argv=None):
@@ -16,7 +17,16 @@ def main(argv=None):
         fullpath = os.path.join(basepath, dirname)
         if is_git(fullpath):
             log("Updating git repo: %s", dirname)
-            update_git_mirror(fullpath, "origin")
+            try:
+                update_git_mirror(fullpath, "origin")
+            except CalledProcessError, e:
+                log("Error occurred: %s", e)
+        elif is_hg(fullpath):
+            log("Updating hg repo: %s", dirname)
+            try:
+                update_hg_mirror(fullpath)
+            except CalledProcessError, e:
+                log("Error occurred: %s", e)
         else:
             log("Skipping path: %s", dirname)
 
