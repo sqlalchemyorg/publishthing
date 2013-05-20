@@ -38,11 +38,11 @@ def hg_checkout_files(repo, work_dir, dirname):
     return checkout
 
 def is_git(path):
-    return os.path.exists(path, ".git") or \
+    return os.path.exists(os.path.join(path, ".git")) or \
         (
-            os.path.exists(path, "config") and
-            os.path.exists(path, "hooks") and
-            os.path.exists(path, "refs")
+            os.path.exists(os.path.join(path, "config")) and
+            os.path.exists(os.path.join(path, "hooks")) and
+            os.path.exists(os.path.join(path, "refs"))
         )
 
 def log(msg, *args):
