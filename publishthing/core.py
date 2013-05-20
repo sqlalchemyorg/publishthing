@@ -1,12 +1,22 @@
 import os
 from subprocess import check_call
 import sys
+import contextlib
+
 
 def update_git_mirror(path, origin):
     """Update a git repo that is mirroring with --mirror
     """
+    with chdir_as(path):
+        check_call(["git", "remote", "update", "--prune", origin])
+
+
+@contextlib.contextmanager
+def chdir_as(path):
+    currdir = os.getcwd()
     os.chdir(path)
-    check_call(["git", "remote", "update", "--prune", origin])
+    yield
+    os.chdir(currdir)
 
 
 def git_checkout_files(repo, work_dir, dirname):
