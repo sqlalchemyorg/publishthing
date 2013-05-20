@@ -27,8 +27,8 @@ http://mysite.com/bitbucket_hook
 
 then set up POST in bitbucket to refer to this URL.
 
-When bitbucket posts to that URL, you'll get "cd <path_to_repo>; git fetch origin"
-to keep it up to date.
+When bitbucket posts to that URL, you'll get "cd <path_to_repo>; git remote update"
+to keep it up to date.   This assumes the repo is a --mirror repo.
 
 """
 
@@ -54,7 +54,7 @@ def bitbucket(mapping):
             if repo in mapping and message['repository']['scm'] == 'git':
                 path, origin = mapping[repo]
                 os.chdir(path)
-                check_call(["git", "fetch", "-t", origin])
+                check_call(["git", "remote", "update", origin])
 
         res.body = "OK"
         return res(environ, start_response)
