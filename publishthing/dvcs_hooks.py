@@ -36,7 +36,7 @@ to keep it up to date.   This assumes the repo is a --mirror repo.
 from webob import Request, Response
 import json
 import os
-from core import update_git_mirror
+from core import update_git_mirror, log, git_push
 
 
 def bitbucket(mapping):
@@ -47,13 +47,17 @@ def bitbucket(mapping):
 
         payload = req.params.get('payload', None)
         try:
+            log("message received....")
             message = json.loads(payload)
         except ValueError:
+            log("couldn't parse payload")
             message = repo = None
         else:
             repo = message['repository']['absolute_url']
+            log("repo url: %s", repo)
             if repo in mapping and message['repository']['scm'] == 'git':
                 entry = mapping[repo]
+                log("Updating repo %s %s", entry['local_repo'], entry['remote'])
                 update_git_mirror(entry['local_repo'], entry['remote'])
                 if 'push_to' in entry:
                     for push_to in entry['push_to']:
