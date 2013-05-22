@@ -11,10 +11,11 @@ e.g.::
 from publishthing import dvcs_hooks
 
 mapping = {
-    "/bitbucket_username/bitbucket_reponame/":(
-        "/path/to/your/repo.git",
-        "origin"
-    )
+    "/bitbucket_username/bitbucket_reponame/":{
+        "local_repo": "/path/to/your/repo.git",
+        "remote": "origin",
+        "push_to": ["github", "some_server"]
+    }
 }
 
 application = dvcs_hooks.bitbucket(mapping)
@@ -52,8 +53,11 @@ def bitbucket(mapping):
         else:
             repo = message['repository']['absolute_url']
             if repo in mapping and message['repository']['scm'] == 'git':
-                path, origin = mapping[repo]
-                update_git_mirror(path, origin)
+                entry = mapping[repo]
+                update_git_mirror(entry['local_repo'], entry['remote'])
+                if 'push_to' in entry:
+                    for push_to in entry['push_to']:
+                        git_push(entry['local_repo'], push_to)
 
         res.body = "OK"
         return res(environ, start_response)

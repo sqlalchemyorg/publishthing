@@ -10,12 +10,20 @@ def update_git_mirror(path, origin):
     with chdir_as(path):
         check_call(["git", "remote", "update", "--prune", origin])
 
+def git_push(path, remote):
+    with chdir_as(path):
+        check_call(["git", "push", remote])
 
 def update_hg_mirror(path):
     """Update an hg repo
     """
     with chdir_as(path):
         check_call(["hg", "pull"])
+
+def hg_push(path, remote):
+    with chdir_as(path):
+        check_call(["hg", "push", remote])
+
 
 @contextlib.contextmanager
 def chdir_as(path):
