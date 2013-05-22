@@ -16,19 +16,18 @@ def main(argv=None):
     for dirname in os.listdir(basepath):
         fullpath = os.path.join(basepath, dirname)
         if is_git(fullpath):
-            log("Updating git repo: %s", dirname)
-            try:
-                update_git_mirror(fullpath, "origin")
-            except CalledProcessError, e:
-                log("Error occurred: %s", e)
+            fn, args = update_git_mirror, (fullpath, "origin")
         elif is_hg(fullpath):
-            log("Updating hg repo: %s", dirname)
-            try:
-                update_hg_mirror(fullpath)
-            except CalledProcessError, e:
-                log("Error occurred: %s", e)
+            fn, args = update_hg_mirror, (fullpath, )
         else:
             log("Skipping path: %s", dirname)
+            continue
+
+        try:
+            fn(*args)
+        except CalledProcessError, e:
+            log("Error occurred: %s", e)
+
 
 if __name__ == '__main__':
     main()

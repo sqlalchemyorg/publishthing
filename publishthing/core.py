@@ -7,62 +7,60 @@ import contextlib
 def update_git_mirror(path, origin):
     """Update a git repo that is mirroring with --mirror
     """
-    log("Updating git repo %s %s", path, origin)
     with chdir_as(path):
-        check_call(["git", "remote", "update", "--prune", origin])
+        call_cmd(["git", "remote", "update", "--prune", origin])
 
 def git_push(path, remote):
-    log("Pushing git repo %s to %s", path, remote)
     with chdir_as(path):
-        check_call(["git", "push", remote])
+        call_cmd(["git", "push", remote])
 
 def update_hg_mirror(path):
     """Update an hg repo
     """
-    log("Updating hg repo %s", path)
     with chdir_as(path):
-        check_call(["hg", "pull"])
+        call_cmd(["hg", "pull"])
 
 def hg_push(path, remote):
-    log("Pushing hg repo %s to %s", path, remote)
     with chdir_as(path):
-        check_call(["hg", "push", remote])
+        call_cmd(["hg", "push", remote])
 
+def call_cmd(args):
+    log(" ".join(args))
+    check_call(args)
 
 @contextlib.contextmanager
 def chdir_as(path):
     currdir = os.getcwd()
-    os.chdir(path)
+    chdir(path)
     yield
     os.chdir(currdir)
 
+def chdir(path):
+    os.chdir(path)
+    log("cd %s", path)
 
 def git_checkout_files(repo, work_dir, dirname):
     os.environ.pop('GIT_DIR', None)
     checkout = os.path.join(work_dir, dirname)
     if not os.path.exists(checkout):
-        os.chdir(work_dir)
-        log("Cloning %s into %s", repo, os.path.join(work_dir, dirname))
-        check_call(["git", "clone", repo, dirname])
-        os.chdir(checkout)
+        chdir(work_dir)
+        call_cmd(["git", "clone", repo, dirname])
+        chdir(checkout)
     else:
-        os.chdir(checkout)
-        log("Updating %s", checkout)
-        check_call(["git", "pull"])
+        chdir(checkout)
+        call_cmd(["git", "pull"])
     return checkout
 
 def hg_checkout_files(repo, work_dir, dirname):
     checkout = os.path.join(work_dir, dirname)
     if not os.path.exists(checkout):
-        os.chdir(work_dir)
-        log("Cloning %s into %s", repo, os.path.join(work_dir, dirname))
-        check_call(["hg", "clone", repo, dirname])
-        os.chdir(checkout)
+        chdir(work_dir)
+        call_cmd(["hg", "clone", repo, dirname])
+        chdir(checkout)
     else:
-        os.chdir(checkout)
-        log("Updating %s", checkout)
-        check_call(["hg", "pull"])
-        check_call(["hg", "up"])
+        chdir(checkout)
+        call_cmd(["hg", "pull"])
+        call_cmd(["hg", "up"])
     return checkout
 
 def is_git(path):
