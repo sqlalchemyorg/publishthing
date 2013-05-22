@@ -7,20 +7,24 @@ import contextlib
 def update_git_mirror(path, origin):
     """Update a git repo that is mirroring with --mirror
     """
+    log("Updating git repo %s %s", path, origin)
     with chdir_as(path):
         check_call(["git", "remote", "update", "--prune", origin])
 
 def git_push(path, remote):
+    log("Pushing git repo %s to %s", path, remote)
     with chdir_as(path):
         check_call(["git", "push", remote])
 
 def update_hg_mirror(path):
     """Update an hg repo
     """
+    log("Updating hg repo %s", path)
     with chdir_as(path):
         check_call(["hg", "pull"])
 
 def hg_push(path, remote):
+    log("Pushing hg repo %s to %s", path, remote)
     with chdir_as(path):
         check_call(["hg", "push", remote])
 
@@ -73,5 +77,6 @@ def is_hg(path):
     return os.path.exists(os.path.join(path, ".hg")) or \
             os.path.exists(os.path.join(path, "hgrc"))
 
+# TODO: use logging
 def log(msg, *args):
-    print(msg % args)
+    print("[publishthing] " + (msg % args))

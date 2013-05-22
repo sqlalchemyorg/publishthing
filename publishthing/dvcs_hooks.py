@@ -57,7 +57,6 @@ def bitbucket(mapping):
             log("repo url: %s", repo)
             if repo in mapping and message['repository']['scm'] == 'git':
                 entry = mapping[repo]
-                log("Updating repo %s %s", entry['local_repo'], entry['remote'])
                 update_git_mirror(entry['local_repo'], entry['remote'])
                 if 'push_to' in entry:
                     for push_to in entry['push_to']:
