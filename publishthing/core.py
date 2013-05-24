@@ -12,7 +12,7 @@ def update_git_mirror(path, origin):
 
 def git_push(path, remote):
     with chdir_as(path):
-        call_cmd(["git", "push", remote])
+        call_cmd(["git", "push", "--mirror", remote])
 
 def update_hg_mirror(path):
     """Update an hg repo
