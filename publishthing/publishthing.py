@@ -32,7 +32,7 @@ def publish_s3(copy_from, sitename, dry):
                sitename)
     if not dry:
         check_call(["bash", "-c",
-            "s3vcp %s %s /" % (sitename, copy_from)])
+            "s3vcp upload %s %s" % (sitename, copy_from)])
 
 def main(argv=None):
     parser = argparse.ArgumentParser()
