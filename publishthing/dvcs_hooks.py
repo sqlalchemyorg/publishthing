@@ -14,7 +14,8 @@ mapping = {
     "/bitbucket_username/bitbucket_reponame/":{
         "local_repo": "/path/to/your/repo.git",
         "remote": "origin",
-        "push_to": ["github", "some_server"]
+        "push_to": ["github", "some_server"],
+        "update_server_info": True
     }
 }
 
@@ -57,7 +58,10 @@ def bitbucket(mapping):
             log("repo url: %s", repo)
             if repo in mapping and message['repository']['scm'] == 'git':
                 entry = mapping[repo]
-                update_git_mirror(entry['local_repo'], entry['remote'])
+                update_server_info = entry.get("update_server_info", False)
+                update_git_mirror(entry['local_repo'],
+                                    entry['remote'],
+                                    update_server_info=update_server_info)
                 if 'push_to' in entry:
                     for push_to in entry['push_to']:
                         git_push(entry['local_repo'], push_to)

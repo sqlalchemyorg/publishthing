@@ -4,11 +4,15 @@ import sys
 import contextlib
 
 
-def update_git_mirror(path, origin):
+def update_git_mirror(path, origin, update_server_info=False):
     """Update a git repo that is mirroring with --mirror
     """
     with chdir_as(path):
         call_cmd(["git", "remote", "update", "--prune", origin])
+        # TODO: not sure how to get this to trigger
+        # as part of the git remote update
+        if update_server_info:
+            call_cmd(["git", "update-server-info"])
 
 def git_push(path, remote):
     with chdir_as(path):
