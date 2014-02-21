@@ -47,6 +47,10 @@ def bitbucket(mapping):
         res.content_type = 'text/plain'
 
         payload = req.params.get('payload', None)
+        if payload is None:
+            res.body = "dvcs_hooks OK"
+            return res(environ, start_response)
+
         try:
             log("message received....")
             message = json.loads(payload)
