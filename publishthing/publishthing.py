@@ -3,6 +3,7 @@ import argparse
 import os
 from subprocess import check_call
 from core import log, git_checkout_files, hg_checkout_files
+from . import s3push
 
 
 def blogofile_build(checkout):
@@ -31,8 +32,8 @@ def publish_s3(copy_from, sitename, dry):
                copy_from,
                sitename)
     if not dry:
-        check_call(["bash", "-c",
-            "s3vcp upload %s %s" % (sitename, copy_from)])
+        s3push.s3_upload(sitename, copy_from)
+
 
 def main(argv=None):
     parser = argparse.ArgumentParser()
@@ -47,14 +48,20 @@ def main(argv=None):
     parser.add_argument("--repo-prefix", type=str,
                             help="Optional path prefix inside the repo itself")
     parser.add_argument("--dry", action="store_true", help="Don't actually publish")
+    parser.add_argument(
+        "--domain", type=str,
+        help="Fully qualified domain name, defaults to dirname of repo")
     parser.add_argument("source", type=str, help="Source repository path")
     parser.add_argument("destination", choices=["local", "s3"], help="Destination")
     args = parser.parse_args(argv)
 
     repo = os.path.abspath(args.source)
-    sitename = os.path.basename(repo)
-    if sitename.endswith(".git"):
-        sitename = sitename[0:-4]
+
+    sitename = args.domain
+    if not sitename:
+        sitename = os.path.basename(repo)
+        if sitename.endswith(".git"):
+            sitename = sitename[0:-4]
     log("Site name %s", sitename)
 
     work_dir = os.path.join(os.path.dirname(repo), "work")

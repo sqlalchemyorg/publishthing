@@ -16,7 +16,7 @@ setup(name='publishthing',
       license='MIT',
       packages=["publishthing"],
       zip_safe=False,
-      install_requires=['webob', "s3vcp"],
+      install_requires=['webob', "boto"],
       entry_points={
         'console_scripts': [
             'publishthing = publishthing.publishthing:main',
