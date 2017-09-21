@@ -83,9 +83,9 @@ def bitbucket(mapping):
                 if 'push_to' in entry:
                     for push_to in entry['push_to']:
                         git_push(entry['local_repo'], push_to)
-                res.text = "pushed repository %s" % repo
+                res.text = u"pushed repository %s" % repo
             else:
-                res.text = "Can't locate repository %s" % repo
+                res.text = u"Can't locate repository %s" % repo
         return res(environ, start_response)
     return application
 
