@@ -47,6 +47,9 @@ def bitbucket(mapping):
 
         payload = req.params.get('payload', None)
         if payload is None:
+            payload = req.body
+
+        if payload is None:
             res.body = "dvcs_hooks OK"
             return res(environ, start_response)
 
@@ -62,6 +65,9 @@ def bitbucket(mapping):
                 repo = repository_message['absolute_url']
             else:
                 repo = repository_message['full_name']
+            if not repo.startswith("/"):
+                repo = "/" + repo
+
             log("repo url: %s", repo)
             if repo in mapping and repository_message['scm'] == 'git':
                 entry = mapping[repo]
@@ -73,8 +79,9 @@ def bitbucket(mapping):
                 if 'push_to' in entry:
                     for push_to in entry['push_to']:
                         git_push(entry['local_repo'], push_to)
-
-        res.body = "OK"
+                res.body = "pushed repository %s" % repo
+            else:
+                res.body = "Can't locate repository %s" % repo
         return res(environ, start_response)
     return application
 
