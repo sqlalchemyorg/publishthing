@@ -49,7 +49,7 @@ def bitbucket(mapping):
         if payload is None:
             payload = req.body
 
-        if payload is None:
+        if not payload:
             res.text = "dvcs_hooks OK"
             return res(environ, start_response)
 
@@ -58,6 +58,7 @@ def bitbucket(mapping):
             message = json.loads(payload)
         except ValueError:
             log("couldn't parse payload")
+            res.text = "couldn't parse payload"
             message = repo = None
         else:
             repository_message = message['repository']
