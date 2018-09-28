@@ -13,6 +13,15 @@ def blogofile_build(checkout):
     check_call(["blogofile", "build"])
     return os.path.join(checkout, "_site")
 
+
+def zeekofile_build(checkout):
+    log("building with zeekofile")
+    log("base dir %s", checkout)
+    os.chdir(checkout)
+    check_call(["zeekofile", "build"])
+    return os.path.join(checkout, "_site")
+
+
 def publish_local(copy_from, sitename, local_base, local_prefix, dry):
     site_location = os.path.join(local_base, sitename)
     if not os.path.exists(site_location):
@@ -39,6 +48,7 @@ def main(argv=None):
     parser = argparse.ArgumentParser()
 
     parser.add_argument("--blogofile", action="store_true", help="Run blogofile")
+    parser.add_argument("--zeekofile", action="store_true", help="Run zeekofile")
     parser.add_argument("--type", choices=["git", "hg"],
                             help="Repository type", default="git")
     parser.add_argument("--local-base", type=str,
@@ -79,6 +89,8 @@ def main(argv=None):
 
     if args.blogofile:
         copy_from = blogofile_build(checkout)
+    elif args.zeekofile:
+        copy_from = zeekofile_build(checkout)
     else:
         copy_from = checkout
 
