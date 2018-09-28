@@ -1,11 +1,15 @@
 import os
 import threading
+import sys
 
 from .core import log
 
 from hashlib import md5
 
-from Queue import Queue
+if sys.version_info.major >= 3:
+    from queue import Queue
+else:
+    from Queue import Queue
 
 import boto
 import boto.s3.connection
