@@ -38,7 +38,8 @@ def s3_upload(s3_bucket, lpath):
                 if os.path.basename(lfile).startswith("."):
                     pass
                 else:
-                    file = os.path.join(root, lfile).replace(lpath + "/", "", 1)
+                    file = os.path.join(root, lfile).replace(
+                        lpath + "/", "", 1)
                     queue.put((os.path.join(root, lfile), file))
 
     def consumer(queue):

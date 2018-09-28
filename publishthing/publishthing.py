@@ -2,7 +2,7 @@
 import argparse
 import os
 from subprocess import check_call
-from core import log, git_checkout_files, hg_checkout_files
+from .core import log, git_checkout_files, hg_checkout_files
 from . import s3push
 
 
@@ -28,18 +28,20 @@ def publish_local(copy_from, sitename, local_base, local_prefix, dry):
         raise Exception("No such site: %s" % site_location)
 
     dest = os.path.join(site_location, local_prefix)
-    log("%sCopying %s to %s",
-                "(dry) " if dry else "",
-                copy_from,
-                dest)
+    log(
+        "%sCopying %s to %s",
+        "(dry) " if dry else "",
+        copy_from,
+        dest)
     if not dry:
         check_call(["bash", "-c", "cp -R %s/* %s" % (copy_from, dest)])
 
+
 def publish_s3(copy_from, sitename, dry):
     log("%sPublishing %s to S3 bucket %s",
-               "(dry) " if dry else "",
-               copy_from,
-               sitename)
+        "(dry) " if dry else "",
+        copy_from,
+        sitename)
     if not dry:
         s3push.s3_upload(sitename, copy_from)
 
@@ -47,22 +49,30 @@ def publish_s3(copy_from, sitename, dry):
 def main(argv=None):
     parser = argparse.ArgumentParser()
 
-    parser.add_argument("--blogofile", action="store_true", help="Run blogofile")
-    parser.add_argument("--zeekofile", action="store_true", help="Run zeekofile")
-    parser.add_argument("--type", choices=["git", "hg"],
-                            help="Repository type", default="git")
-    parser.add_argument("--local-base", type=str,
-                            help="Full path to local directory for sites")
-    parser.add_argument("--local-prefix", type=str,
-                            help="Path prefix inside of a local site location")
-    parser.add_argument("--repo-prefix", type=str,
-                            help="Optional path prefix inside the repo itself")
-    parser.add_argument("--dry", action="store_true", help="Don't actually publish")
+    parser.add_argument(
+        "--blogofile", action="store_true", help="Run blogofile")
+    parser.add_argument(
+        "--zeekofile", action="store_true", help="Run zeekofile")
+    parser.add_argument(
+        "--type", choices=["git", "hg"],
+        help="Repository type", default="git")
+    parser.add_argument(
+        "--local-base", type=str,
+        help="Full path to local directory for sites")
+    parser.add_argument(
+        "--local-prefix", type=str,
+        help="Path prefix inside of a local site location")
+    parser.add_argument(
+        "--repo-prefix", type=str,
+        help="Optional path prefix inside the repo itself")
+    parser.add_argument(
+        "--dry", action="store_true", help="Don't actually publish")
     parser.add_argument(
         "--domain", type=str,
         help="Fully qualified domain name, defaults to dirname of repo")
     parser.add_argument("source", type=str, help="Source repository path")
-    parser.add_argument("destination", choices=["local", "s3"], help="Destination")
+    parser.add_argument(
+        "destination", choices=["local", "s3"], help="Destination")
     args = parser.parse_args(argv)
 
     repo = os.path.abspath(args.source)
@@ -95,8 +105,9 @@ def main(argv=None):
         copy_from = checkout
 
     if args.destination == "local":
-        publish_local(copy_from, sitename, args.local_base,
-                                args.local_prefix, args.dry)
+        publish_local(
+            copy_from, sitename, args.local_base,
+            args.local_prefix, args.dry)
     elif args.destination == "s3":
         publish_s3(copy_from, sitename, args.dry)
 

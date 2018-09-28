@@ -36,7 +36,7 @@ to keep it up to date.   This assumes the repo is a --mirror repo.
 
 from webob import Request, Response
 import json
-from core import update_git_mirror, log, git_push
+from .core import update_git_mirror, log, git_push
 
 
 def bitbucket(mapping):

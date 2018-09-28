@@ -1,15 +1,17 @@
 """Update every DVCS in a directory.
 """
 import os
-from core import update_git_mirror, is_git, log, \
-        CalledProcessError, is_hg, update_hg_mirror
+from .core import update_git_mirror, is_git, log, \
+    CalledProcessError, is_hg, update_hg_mirror
 import argparse
+
 
 def main(argv=None):
     parser = argparse.ArgumentParser()
 
-    parser.add_argument("path", type=str,
-            help="Directory containing repositories.")
+    parser.add_argument(
+        "path", type=str,
+        help="Directory containing repositories.")
     args = parser.parse_args(argv)
 
     basepath = os.path.abspath(args.path)
@@ -25,7 +27,7 @@ def main(argv=None):
 
         try:
             fn(*args)
-        except CalledProcessError, e:
+        except CalledProcessError as e:
             log("Error occurred: %s", e)
 
 
