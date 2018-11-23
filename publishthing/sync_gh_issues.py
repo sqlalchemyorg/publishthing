@@ -1,18 +1,23 @@
 import argparse
+import multiprocessing
 import os
 import json
 import requests
 import time
+import random
 import re
 import sys
+
+WORKERS = 10
 
 
 class GitHub:
     _last_push_time = 0
     _rate_limit = None
 
-    def __init__(self, repo, client_id, client_secret):
+    def __init__(self, repo, client_id, client_secret, concurrency=1):
         self.repo = repo
+        self.concurrency = concurrency
         self.url = "https://github.com/%s" % repo
         self.client_id = client_id
         self.client_secret = client_secret
@@ -71,7 +76,7 @@ class GitHub:
         now = time.time()
         if self._last_push_time:
             time_passed = now - self._last_push_time
-            delay = 1 / self._rate_limit['rate_per_sec']
+            delay = (1 / self._rate_limit['rate_per_sec'])
             sleep_for = delay - time_passed
             if sleep_for > 0:
                 time.sleep(sleep_for)
@@ -208,33 +213,37 @@ def run_sync(gh, destination):
 
     highest_timestamp = None
 
+    pool = multiprocessing.Pool(WORKERS)
+
+    jobs = []
+
     for idx, issue in enumerate(gh.get_issues_since(last_received), 1):
         if highest_timestamp is None or \
                 issue["updated_at"] > highest_timestamp:
             highest_timestamp = issue["updated_at"]
 
-        attachments = []
-        attachments.extend(gh.find_attachments(issue))
-
         issue_dest = os.path.join(
             destination, "issues",
             str(issue["number"] // 100), str(issue["number"])
         )
+
+        attachments = []
+        attachments.extend(gh.find_attachments(issue))
+
+        jobs.append(
+            pool.apply_async(
+                _fetch_issue_related,
+                (gh, issue_dest, issue["number"], attachments, )
+            )
+        )
+
         _write_json_file(os.path.join(issue_dest, "issue.json"), issue)
-        comments = list(gh.get_issue_comments(issue["number"]))
-        _write_json_file(os.path.join(issue_dest, "comments.json"), comments)
-        attachments.extend(gh.find_attachments(comments))
-        events = list(gh.get_issue_events(issue["number"]))
-        _write_json_file(os.path.join(issue_dest, "events.json"), events)
 
-        if attachments:
-            for filename, url in attachments:
-                attachment_path = os.path.join(
-                    issue_dest, "attachments", filename)
-                content = gh.get_attachment(url)
-                _write_file(attachment_path, content, "wb")
-
-        if idx % 10 == 0:
+        if idx % 50 == 0:
+            while jobs:
+                print("Waiting for jobs...%s jobs left" % len(jobs))
+                job = jobs.pop(0)
+                job.wait()
             print(
                 "Completed %s issues, most recent updated at: %s" %
                 (idx, highest_timestamp))
@@ -253,6 +262,21 @@ def run_sync(gh, destination):
     )
 
 
+def _fetch_issue_related(gh, issue_dest, issue_num, attachments):
+    comments = list(gh.get_issue_comments(issue_num))
+    _write_json_file(os.path.join(issue_dest, "comments.json"), comments)
+    attachments.extend(gh.find_attachments(comments))
+    events = list(gh.get_issue_events(issue_num))
+    _write_json_file(os.path.join(issue_dest, "events.json"), events)
+
+    if attachments:
+        for filename, url in attachments:
+            attachment_path = os.path.join(
+                issue_dest, "attachments", filename)
+            content = gh.get_attachment(url)
+            _write_file(attachment_path, content, "wb")
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -266,7 +290,8 @@ def main(argv=None):
     opts = parser.parse_args(argv)
     gh = GitHub(
         opts.repo,
-        client_id=opts.client_id, client_secret=opts.client_secret
+        client_id=opts.client_id, client_secret=opts.client_secret,
+        concurrency=WORKERS
     )
 
     run_sync(gh, opts.dest)
