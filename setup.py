@@ -5,10 +5,10 @@ setup(name='publishthing',
       version=1.0,
       description="mike's homegrown static publishing thing",
       classifiers=[
-      'Development Status :: 4 - Beta',
-      'Environment :: Console',
-      'Programming Language :: Python',
-      'Programming Language :: Python :: Implementation :: CPython',
+          'Development Status :: 4 - Beta',
+          'Environment :: Console',
+          'Programming Language :: Python',
+          'Programming Language :: Python :: Implementation :: CPython',
       ],
       author='Mike Bayer',
       author_email='mike@zzzcomputing.com',
@@ -16,11 +16,11 @@ setup(name='publishthing',
       license='MIT',
       packages=["publishthing"],
       zip_safe=False,
-      install_requires=['webob', "boto"],
+      install_requires=['webob', "boto", "requests"],
       entry_points={
-        'console_scripts': [
-            'publishthing = publishthing.publishthing:main',
-            'update_all_dvcs = publishthing.update_all:main',
-        ],
-      }
-)
+          'console_scripts': [
+              'publishthing = publishthing.publishthing:main',
+              'update_all_dvcs = publishthing.update_all:main',
+              'sync_github_issues = publishthing.sync_gh_issues:main'
+          ],
+      })
