@@ -20,6 +20,9 @@ class GitHub:
         self.session.hooks["response"].append(self._update_rate_limit)
 
     def _update_rate_limit(self, resp, *args, **kw):
+        if 'X-RateLimit-Limit' not in resp.headers:
+            return
+
         now = time.time()
         if self._rate_limit is None or now - self._rate_limit['last'] > 60:
             self._rate_limit = {
@@ -103,12 +106,12 @@ class GitHub:
         # continue updating our "updated_at" value
         url = (
             "https://api.github.com/repos/%s/issues?"
-            "sort=updated&direction=asc&per_page=100" % self.repo
+            "state=all&sort=updated&direction=asc&per_page=100" % self.repo
         )
         if last_received:
             url = "%s&since=%s" % (url, last_received)
 
-        for idx, issue in enumerate(self._yield_with_links(url)):
+        for idx, issue in enumerate(self._yield_with_links(url), 1):
             if idx % 100 == 0:
                 print("received %s issues" % idx)
             yield issue
@@ -205,11 +208,11 @@ def run_sync(gh, destination):
 
     highest_timestamp = None
 
-    for idx, issue in enumerate(gh.get_issues_since(last_received)):
-        print("UPDATED AT: %s" % issue['updated_at'])
+    for idx, issue in enumerate(gh.get_issues_since(last_received), 1):
         if highest_timestamp is None or \
                 issue["updated_at"] > highest_timestamp:
             highest_timestamp = issue["updated_at"]
+
         attachments = []
         attachments.extend(gh.find_attachments(issue))
 
@@ -232,11 +235,17 @@ def run_sync(gh, destination):
                 _write_file(attachment_path, content, "wb")
 
         if idx % 10 == 0:
+            print(
+                "Completed %s issues, most recent updated at: %s" %
+                (idx, highest_timestamp))
             _write_file(
                 last_received_file,
                 "%s\n%s" % (gh.url, highest_timestamp),
                 "w"
             )
+    print(
+        "Completed %s issues, most recent updated at: %s" %
+        (idx, highest_timestamp))
     _write_file(
         last_received_file,
         "%s\n%s" % (gh.url, highest_timestamp),
