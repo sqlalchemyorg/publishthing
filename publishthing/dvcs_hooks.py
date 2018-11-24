@@ -45,7 +45,15 @@ def mirror_git(mapping):
         res = Response()
         res.content_type = 'text/plain'
 
-        payload = req.body
+        # this seems to be what github does,
+        # and bitbucket either does or used to.
+        payload = req.params.get('payload', None)
+
+        if payload is None:
+            # not sure if this is what bitbucket used to do, or does
+            # now
+            payload = req.body
+
         if not payload:
             res.text = u"dvcs_hooks OK"
             return res(environ, start_response)
