@@ -11,7 +11,7 @@ e.g.::
 from publishthing import dvcs_hooks
 
 mapping = {
-    "/bitbucket_username/bitbucket_reponame/":{
+    "/service_username/reponame/":{
         "local_repo": "/path/to/your/repo.git",
         "remote": "origin",
         "push_to": ["github", "some_server"],
@@ -19,7 +19,7 @@ mapping = {
     }
 }
 
-application = dvcs_hooks.bitbucket(mapping)
+application = dvcs_hooks.mirror_git(mapping)
 
 #####
 
@@ -39,16 +39,13 @@ import json
 from .core import update_git_mirror, log, git_push
 
 
-def bitbucket(mapping):
+def mirror_git(mapping):
     def application(environ, start_response):
         req = Request(environ)
         res = Response()
         res.content_type = 'text/plain'
 
-        payload = req.params.get('payload', None)
-        if payload is None:
-            payload = req.body
-
+        payload = req.body
         if not payload:
             res.text = u"dvcs_hooks OK"
             return res(environ, start_response)
@@ -61,11 +58,16 @@ def bitbucket(mapping):
             res.text = u"couldn't parse payload"
             message = repo = None
         else:
+            # github and bitbucket both have:
+            #
+            # {
+            #     "repository": {"full_name": "owner/reponame"}
+            # }
+            #
+            # that's surprising.
+            #
             repository_message = message['repository']
-            if 'absolute_url' in repository_message:
-                repo = repository_message['absolute_url']
-            else:
-                repo = repository_message['full_name']
+            repo = repository_message['full_name']
 
             if not repo.startswith("/"):
                 repo = "/" + repo
@@ -73,7 +75,7 @@ def bitbucket(mapping):
                 repo = repo + "/"
 
             log("repo url: %s", repo)
-            if repo in mapping and repository_message['scm'] == 'git':
+            if repo in mapping:
                 entry = mapping[repo]
                 update_server_info = entry.get("update_server_info", False)
                 update_git_mirror(
