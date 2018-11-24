@@ -106,6 +106,17 @@ class GitHub:
             for rec in resp.json():
                 yield rec
 
+    def _remove_prs(self, issue_list):
+        """
+        GitHub's REST API v3 considers every pull request an issue, but not
+        every issue is a pull request. For this reason, "Issues"
+        endpoints may return both issues and pull requests in the
+        response. You can identify pull requests by the pull_request key.
+        """
+        for issue in issue_list:
+            if not issue.get("pull_request"):
+                yield issue
+
     def get_issues_since(self, last_received):
         # get issues in updated_at order ascending, so we can
         # continue updating our "updated_at" value
@@ -116,7 +127,8 @@ class GitHub:
         if last_received:
             url = "%s&since=%s" % (url, last_received)
 
-        for idx, issue in enumerate(self._yield_with_links(url), 1):
+        for idx, issue in enumerate(
+                self._remove_prs(self._yield_with_links(url)), 1):
             if idx % 100 == 0:
                 print("received %s issues" % idx)
             yield issue
