@@ -1,8 +1,6 @@
 """
-Work with Bitbucket POST calls to update a local repo in response
-to a bitbucket event.
-
-See https://confluence.atlassian.com/display/BITBUCKET/POST+Service+Management
+Work with Github / Bitbucket push events to update a local repo in response
+to a push.
 
 e.g.::
 
@@ -11,10 +9,10 @@ e.g.::
 from publishthing import dvcs_hooks
 
 mapping = {
-    "/service_username/reponame/":{
+    "service_username/reponame":{
         "local_repo": "/path/to/your/repo.git",
         "remote": "origin",
-        "push_to": ["github", "some_server"],
+        "push_to": ["github", "other_remote"],
         "update_server_info": True
     }
 }
@@ -25,12 +23,14 @@ application = dvcs_hooks.mirror_git(mapping)
 
 ### then set up a URL to point to the .wsgi file:
 
-http://mysite.com/bitbucket_hook
+http://mysite.com/mirror_dvcs
 
-then set up POST in bitbucket to refer to this URL.
+then set up the pull event in Github or Bitbucket to refer to this URL.
 
-When bitbucket posts to that URL, you'll get "cd <path_to_repo>; git remote update"
-to keep it up to date.   This assumes the repo is a --mirror repo.
+local_repo refers to a place where you've created a clone of the repo
+using ``git clone --mirror``.  The "origin" should be where we get the
+push from.  push_to is then a list of remotes to push to.  These remotes
+have to also be in the local mirror checkout using "git remote add".
 
 """
 
@@ -77,10 +77,7 @@ def mirror_git(mapping):
             repository_message = message['repository']
             repo = repository_message['full_name']
 
-            if not repo.startswith("/"):
-                repo = "/" + repo
-            if not repo.endswith("/"):
-                repo = repo + "/"
+            repo = repo.strip("/")
 
             log("repo url: %s", repo)
             if repo in mapping:
