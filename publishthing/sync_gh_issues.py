@@ -295,9 +295,9 @@ def main(argv=None):
         "repo", type=str, help="user/reponame string on github")
     parser.add_argument("dest", type=str, help="directory in which to sync")
     parser.add_argument(
-        "--client_id", type=str, help="oauth client id")
+        "--client-id", type=str, help="oauth client id")
     parser.add_argument(
-        "--client_secret", type=str, help="oauth client secret")
+        "--client-secret", type=str, help="oauth client secret")
 
     opts = parser.parse_args(argv)
     gh = GitHub(
