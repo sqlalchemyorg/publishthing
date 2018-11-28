@@ -106,17 +106,6 @@ class GitHub:
             for rec in resp.json():
                 yield rec
 
-    def _remove_prs(self, issue_list):
-        """
-        GitHub's REST API v3 considers every pull request an issue, but not
-        every issue is a pull request. For this reason, "Issues"
-        endpoints may return both issues and pull requests in the
-        response. You can identify pull requests by the pull_request key.
-        """
-        for issue in issue_list:
-            if not issue.get("pull_request"):
-                yield issue
-
     def _get_stub_issues(self, last_received):
         """Get 'stub' issues linked to a comments or events that have been
         updated since the last_received time
@@ -130,7 +119,7 @@ class GitHub:
             "state=all&sort=updated&direction=asc&per_page=100" % self.repo
         )
         url = "%s&since=%s" % (url, last_received)
-        for comment in self._yield_with_links(url):
+        for idx, comment in enumerate(self._yield_with_links(url), 1):
             if comment.get('issue_url'):
                 issue_url = comment['issue_url']
                 issue_num = int(
@@ -146,6 +135,10 @@ class GitHub:
                         "updated_at": comment['updated_at'],
                         "number": issue_num
                     }
+            if idx % 100 == 0:
+                print(
+                    "received %s comments that have changed "
+                    "since date..." % idx)
 
         # NOTE: the "get events" API doesn't seem to honor "since".
         # so I am assuming / hoping that an event on an issue means the
@@ -170,8 +163,7 @@ class GitHub:
             url = "%s&since=%s" % (url, last_received)
 
         idx = 1
-        for idx, issue in enumerate(
-                self._remove_prs(self._yield_with_links(url)), idx):
+        for idx, issue in enumerate(self._yield_with_links(url), idx):
             if idx % 100 == 0:
                 print("received %s issues" % idx)
             additional_issues.pop(issue['number'], None)
@@ -322,6 +314,11 @@ def run_sync(gh, destination):
                 "%s\n%s" % (gh.url, highest_timestamp),
                 "w"
             )
+
+    while jobs:
+        print("Waiting for jobs...%s jobs left" % len(jobs))
+        job = jobs.pop(0)
+        job.wait()
     print(
         "Completed %s issues, most recent updated at: %s" %
         (idx, highest_timestamp))
