@@ -4,7 +4,6 @@ import os
 import json
 import requests
 import time
-import random
 import re
 import sys
 
@@ -91,7 +90,9 @@ class GitHub:
                 "client_secret": self.client_secret}
         )
         if resp.status_code != 200:
-            raise Exception("Got response %s for %s" % (resp.status_code, url))
+            raise Exception(
+                "Got response %s for %s: %s" %
+                (resp.status_code, url, resp.content))
 
         return resp
 
