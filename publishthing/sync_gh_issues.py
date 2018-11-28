@@ -117,9 +117,51 @@ class GitHub:
             if not issue.get("pull_request"):
                 yield issue
 
+    def _get_stub_issues(self, last_received):
+        """Get 'stub' issues linked to a comments or events that have been
+        updated since the last_received time
+
+        """
+
+        additional_issues = {}
+
+        url = (
+            "https://api.github.com/repos/%s/issues/comments?"
+            "state=all&sort=updated&direction=asc&per_page=100" % self.repo
+        )
+        url = "%s&since=%s" % (url, last_received)
+        for comment in self._yield_with_links(url):
+            if comment.get('issue_url'):
+                issue_url = comment['issue_url']
+                issue_num = int(
+                    re.match(r'.*issues/(\d+)', issue_url).group(1)
+                )
+                if issue_num in additional_issues:
+                    stub = additional_issues[issue_num]
+                    stub['updated_at'] = max(
+                        comment['updated_at'], stub['updated_at'])
+                else:
+                    additional_issues[issue_num] = {
+                        "is_stub_issue": True,
+                        "updated_at": comment['updated_at'],
+                        "number": issue_num
+                    }
+
+        # NOTE: the "get events" API doesn't seem to honor "since".
+        # so I am assuming / hoping that an event on an issue means the
+        # issue's updated_at changed.
+
+        return additional_issues
+
     def get_issues_since(self, last_received):
         # get issues in updated_at order ascending, so we can
         # continue updating our "updated_at" value
+
+        if last_received:
+            additional_issues = self._get_stub_issues(last_received)
+        else:
+            additional_issues = {}
+
         url = (
             "https://api.github.com/repos/%s/issues?"
             "state=all&sort=updated&direction=asc&per_page=100" % self.repo
@@ -131,7 +173,11 @@ class GitHub:
                 self._remove_prs(self._yield_with_links(url)), 1):
             if idx % 100 == 0:
                 print("received %s issues" % idx)
+            additional_issues.pop(issue['number'], None)
             yield issue
+        for idx, stub in enumerate(additional_issues.values(), idx):
+            yield stub
+
         print("received %s issues total" % idx)
 
     def get_issue_comments(self, issue_number):
@@ -230,6 +276,13 @@ def run_sync(gh, destination):
     jobs = []
 
     for idx, issue in enumerate(gh.get_issues_since(last_received), 1):
+
+        # since we must also look for last_received comments and
+        # events for an issue tha hasn't changed, get_issues_since() yields
+        # "stub" issues that only mean "go get the comments and events"
+        # for a given issue number
+        is_stub_issue = issue.get('is_stub_issue', False)
+
         if highest_timestamp is None or \
                 issue["updated_at"] > highest_timestamp:
             highest_timestamp = issue["updated_at"]
@@ -240,7 +293,9 @@ def run_sync(gh, destination):
         )
 
         attachments = []
-        attachments.extend(gh.find_attachments(issue))
+
+        if not is_stub_issue:
+            attachments.extend(gh.find_attachments(issue))
 
         jobs.append(
             pool.apply_async(
@@ -249,7 +304,8 @@ def run_sync(gh, destination):
             )
         )
 
-        _write_json_file(os.path.join(issue_dest, "issue.json"), issue)
+        if not is_stub_issue:
+            _write_json_file(os.path.join(issue_dest, "issue.json"), issue)
 
         if idx % 50 == 0:
             while jobs:
