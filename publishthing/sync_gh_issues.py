@@ -276,6 +276,7 @@ def run_sync(gh, destination):
 
     jobs = []
 
+    idx = 0
     for idx, issue in enumerate(gh.get_issues_since(last_received), 1):
 
         # since we must also look for last_received comments and
