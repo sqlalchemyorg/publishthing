@@ -106,54 +106,32 @@ class GitHub:
             for rec in resp.json():
                 yield rec
 
-    def _get_stub_issues(self, last_received):
-        """Get 'stub' issues linked to a comments or events that have been
-        updated since the last_received time
-
-        """
-
-        additional_issues = {}
+    def get_comments_since(self, last_received):
+        # get issues in updated_at order ascending, so we can
+        # continue updating our "updated_at" value
 
         url = (
             "https://api.github.com/repos/%s/issues/comments?"
             "state=all&sort=updated&direction=asc&per_page=100" % self.repo
         )
-        url = "%s&since=%s" % (url, last_received)
-        for idx, comment in enumerate(self._yield_with_links(url), 1):
-            if comment.get('issue_url'):
-                issue_url = comment['issue_url']
-                issue_num = int(
-                    re.match(r'.*issues/(\d+)', issue_url).group(1)
-                )
-                if issue_num in additional_issues:
-                    stub = additional_issues[issue_num]
-                    stub['updated_at'] = max(
-                        comment['updated_at'], stub['updated_at'])
-                else:
-                    additional_issues[issue_num] = {
-                        "is_stub_issue": True,
-                        "updated_at": comment['updated_at'],
-                        "number": issue_num
-                    }
+        if last_received:
+            url = "%s&since=%s" % (url, last_received)
+
+        idx = 1
+        for idx, comment in enumerate(self._yield_with_links(url), idx):
             if idx % 100 == 0:
-                print(
-                    "received %s comments that have changed "
-                    "since date..." % idx)
+                print("received %s comments" % idx)
+            issue_num = int(
+                re.match(r'.*/issues/(\d+)$', comment['issue_url']).group(1)
+            )
+            comment['issue_number'] = issue_num
+            yield comment
 
-        # NOTE: the "get events" API doesn't seem to honor "since".
-        # so I am assuming / hoping that an event on an issue means the
-        # issue's updated_at changed.
-
-        return additional_issues
+        print("received %s comments total" % idx)
 
     def get_issues_since(self, last_received):
         # get issues in updated_at order ascending, so we can
         # continue updating our "updated_at" value
-
-        if last_received:
-            additional_issues = self._get_stub_issues(last_received)
-        else:
-            additional_issues = {}
 
         url = (
             "https://api.github.com/repos/%s/issues?"
@@ -166,19 +144,9 @@ class GitHub:
         for idx, issue in enumerate(self._yield_with_links(url), idx):
             if idx % 100 == 0:
                 print("received %s issues" % idx)
-            additional_issues.pop(issue['number'], None)
             yield issue
-        for idx, stub in enumerate(additional_issues.values(), idx):
-            yield stub
 
         print("received %s issues total" % idx)
-
-    def get_issue_comments(self, issue_number):
-        url = (
-            "https://api.github.com/repos/"
-            "%s/issues/%s/comments" % (self.repo, issue_number)
-        )
-        return self._yield_with_links(url)
 
     def get_issue_events(self, issue_number):
         url = (
@@ -195,14 +163,7 @@ class GitHub:
         return resp.content
 
     def find_attachments(self, json):
-        if isinstance(json, list):
-            attachments = []
-            for comment in json:
-                attachments.extend(self._scan_attachments(comment['body']))
-        else:
-            return self._scan_attachments(json['body'])
-
-        return attachments
+        return self._scan_attachments(json['body'])
 
     def _scan_attachments(self, body):
         # not sure if the repo stays constant in the bodies if the
@@ -242,6 +203,23 @@ def _write_json_file(path, json_data):
         json.dump(json_data, file_, indent=4)
 
 
+def run_jobs(iterator, jobs, completed_callback):
+    for idx, item in enumerate(iterator):
+        yield item
+
+        if idx % 50 == 0:
+            while jobs:
+                print("Waiting for jobs...%s jobs left" % len(jobs))
+                job = jobs.pop(0)
+                job.wait()
+            completed_callback(idx, False)
+    while jobs:
+        print("Waiting for jobs...%s jobs left" % len(jobs))
+        job = jobs.pop(0)
+        job.wait()
+    completed_callback(idx, True)
+
+
 def run_sync(gh, destination):
     destination = os.path.abspath(destination)
     if not os.path.exists(destination):
@@ -268,15 +246,22 @@ def run_sync(gh, destination):
 
     jobs = []
 
-    idx = 0
-    for idx, issue in enumerate(gh.get_issues_since(last_received), 1):
+    def completed_callback(name):
+        def do_completed(idx, is_done):
+            print(
+                "Completed %s %s, most recent updated at: %s" %
+                (idx, name, highest_timestamp))
+            _write_file(
+                last_received_file,
+                "%s\n%s" % (gh.url, highest_timestamp),
+                "w"
+            )
+        return do_completed
 
-        # since we must also look for last_received comments and
-        # events for an issue tha hasn't changed, get_issues_since() yields
-        # "stub" issues that only mean "go get the comments and events"
-        # for a given issue number
-        is_stub_issue = issue.get('is_stub_issue', False)
-
+    for issue in run_jobs(
+        gh.get_issues_since(last_received), jobs,
+        completed_callback("issues")
+    ):
         if highest_timestamp is None or \
                 issue["updated_at"] > highest_timestamp:
             highest_timestamp = issue["updated_at"]
@@ -288,8 +273,7 @@ def run_sync(gh, destination):
 
         attachments = []
 
-        if not is_stub_issue:
-            attachments.extend(gh.find_attachments(issue))
+        attachments.extend(gh.find_attachments(issue))
 
         jobs.append(
             pool.apply_async(
@@ -298,50 +282,54 @@ def run_sync(gh, destination):
             )
         )
 
-        if not is_stub_issue:
-            _write_json_file(os.path.join(issue_dest, "issue.json"), issue)
+        _write_json_file(os.path.join(issue_dest, "issue.json"), issue)
 
-        if idx % 50 == 0:
-            while jobs:
-                print("Waiting for jobs...%s jobs left" % len(jobs))
-                job = jobs.pop(0)
-                job.wait()
-            print(
-                "Completed %s issues, most recent updated at: %s" %
-                (idx, highest_timestamp))
-            _write_file(
-                last_received_file,
-                "%s\n%s" % (gh.url, highest_timestamp),
-                "w"
+    for comment in run_jobs(
+        gh.get_comments_since(last_received), jobs,
+        completed_callback("comments")
+    ):
+        if highest_timestamp is None or \
+                comment["updated_at"] > highest_timestamp:
+            highest_timestamp = comment["updated_at"]
+
+        issue_dest = os.path.join(
+            destination, "issues",
+            str(comment["issue_number"] // 100), str(comment["issue_number"])
+        )
+
+        attachments = []
+
+        attachments.extend(gh.find_attachments(comment))
+
+        jobs.append(
+            pool.apply_async(
+                _fetch_attachments,
+                (gh, issue_dest, attachments, )
             )
+        )
 
-    while jobs:
-        print("Waiting for jobs...%s jobs left" % len(jobs))
-        job = jobs.pop(0)
-        job.wait()
-    print(
-        "Completed %s issues, most recent updated at: %s" %
-        (idx, highest_timestamp))
-    _write_file(
-        last_received_file,
-        "%s\n%s" % (gh.url, highest_timestamp),
-        "w"
-    )
+        _write_json_file(os.path.join(
+            issue_dest, "comment_%s_%s.json" % (
+                comment['created_at'],
+                comment['id']
+            )
+        ), comment)
 
 
 def _fetch_issue_related(gh, issue_dest, issue_num, attachments):
-    comments = list(gh.get_issue_comments(issue_num))
-    _write_json_file(os.path.join(issue_dest, "comments.json"), comments)
-    attachments.extend(gh.find_attachments(comments))
     events = list(gh.get_issue_events(issue_num))
     _write_json_file(os.path.join(issue_dest, "events.json"), events)
 
     if attachments:
-        for filename, url in attachments:
-            attachment_path = os.path.join(
-                issue_dest, "attachments", filename)
-            content = gh.get_attachment(url)
-            _write_file(attachment_path, content, "wb")
+        _fetch_attachments(gh, issue_dest, attachments)
+
+
+def _fetch_attachments(gh, issue_dest, attachments):
+    for filename, url in attachments:
+        attachment_path = os.path.join(
+            issue_dest, "attachments", filename)
+        content = gh.get_attachment(url)
+        _write_file(attachment_path, content, "wb")
 
 
 def main(argv=None):
