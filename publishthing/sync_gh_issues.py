@@ -169,8 +169,9 @@ class GitHub:
         if last_received:
             url = "%s&since=%s" % (url, last_received)
 
+        idx = 1
         for idx, issue in enumerate(
-                self._remove_prs(self._yield_with_links(url)), 1):
+                self._remove_prs(self._yield_with_links(url)), idx):
             if idx % 100 == 0:
                 print("received %s issues" % idx)
             additional_issues.pop(issue['number'], None)
