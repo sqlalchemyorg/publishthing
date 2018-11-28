@@ -276,10 +276,13 @@ def run_sync(gh, destination):
 
         attachments.extend(gh.find_attachments(issue))
 
+        events = list(gh.get_issue_events(issue["number"]))
+        _write_json_file(os.path.join(issue_dest, "events.json"), events)
+
         jobs.append(
             pool.apply_async(
-                _fetch_issue_related,
-                (gh, issue_dest, issue["number"], attachments, )
+                _fetch_attachments,
+                (gh, issue_dest, attachments, )
             )
         )
 
@@ -315,14 +318,6 @@ def run_sync(gh, destination):
                 comment['id']
             )
         ), comment)
-
-
-def _fetch_issue_related(gh, issue_dest, issue_num, attachments):
-    events = list(gh.get_issue_events(issue_num))
-    _write_json_file(os.path.join(issue_dest, "events.json"), events)
-
-    if attachments:
-        _fetch_attachments(gh, issue_dest, attachments)
 
 
 def _fetch_attachments(gh, issue_dest, attachments):
