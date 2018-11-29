@@ -14,12 +14,11 @@ class GitHub:
     _last_push_time = 0
     _rate_limit = None
 
-    def __init__(self, repo, client_id, client_secret, concurrency=1):
+    def __init__(self, repo, access_token, concurrency=1):
         self.repo = repo
         self.concurrency = concurrency
         self.url = "https://github.com/%s" % repo
-        self.client_id = client_id
-        self.client_secret = client_secret
+        self.access_token = access_token
         self.session = requests.Session()
         self.session.hooks["response"].append(self._update_rate_limit)
 
@@ -85,9 +84,9 @@ class GitHub:
         self._wait_for_api()
         resp = self.session.get(
             url,
-            params={
-                "client_id": self.client_id,
-                "client_secret": self.client_secret}
+            headers={
+                "Authorization": "token %s" % self.access_token
+            }
         )
         if resp.status_code != 200:
             raise Exception(
@@ -205,6 +204,7 @@ def _write_json_file(path, json_data):
 
 
 def run_jobs(iterator, jobs, completed_callback):
+    idx = 0
     for idx, item in enumerate(iterator):
         yield item
 
@@ -334,14 +334,12 @@ def main(argv=None):
         "repo", type=str, help="user/reponame string on github")
     parser.add_argument("dest", type=str, help="directory in which to sync")
     parser.add_argument(
-        "--client-id", type=str, help="oauth client id")
-    parser.add_argument(
-        "--client-secret", type=str, help="oauth client secret")
+        "--access-token", type=str, help="oauth access token")
 
     opts = parser.parse_args(argv)
     gh = GitHub(
         opts.repo,
-        client_id=opts.client_id, client_secret=opts.client_secret,
+        access_token=opts.access_token,
         concurrency=WORKERS
     )
 
