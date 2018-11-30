@@ -24,9 +24,9 @@ in match.group(1)::
     [label "github-comment"]
       repo = sqlalchemy/testgerrit
       fixes-re = "[Ff]ixes:? +#(\\d+)"
-      fixes-message = "**%(user)s** has proposed a fix for this issue:\\n\\n**%(summary)s** %(gerritlink)s"
+      fixes-message = "**%(author)s** has proposed a fix for this issue:\\n\\n**%(summary)s** %(gerritlink)s"
       references-re = "[Rr]eferences:? +#(\\d+)"
-      references-message = "**%(user)s** referenced this issue:\\n\\n**%(summary)s** %(gerritlink)s"
+      references-message = "**%(author)s** referenced this issue:\\n\\n**%(summary)s** %(gerritlink)s"
 
 
 Step 3:  Place a shell script in the gerrit environment::
@@ -195,6 +195,7 @@ def main(argv=None):
     this_revision = get_gerrit_patchset_commit(
         service_url, opts.change, opts.patchset)
 
+    author = this_revision['author']['name']
     summary = this_revision['message'].split("\n")[0]
 
     if opts.patchset > 1:
@@ -219,6 +220,7 @@ def main(argv=None):
     for message, issue_number in issue_numbers:
         complete_message = message % {
             "user": opts.uploader_username,
+            "author": author,
             "gerritlink": opts.change_url,
             "summary": summary
         }
