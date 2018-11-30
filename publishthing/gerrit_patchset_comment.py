@@ -23,16 +23,10 @@ in match.group(1)::
         owner = group owners
     [label "github-comment"]
       repo = sqlalchemy/testgerrit
-
-      fixes_re = "[Ff]ixes:? +#(\d+)"
-      fixes_message = %(user)s submitted a Gerrit for review: %(gerritlink)s
-          %(summary)
-
-      references_re = "[Rr]eferences:? +#(\d+)"
-      references_message = "%(user)s referenced this issue in Gerrit: %(gerritlink)s"
-
-      my_custom_re = "Hey issue is (\d+)"
-      my_custom_message = "Yo %(user)s just put up %(gerritlink)s"
+      fixes-re = "[Ff]ixes:? +#(\\d+)"
+      fixes-message = "**%(user)s** has proposed a fix for this issue:\\n\\n**%(summary)s** %(gerritlink)s"
+      references-re = "[Rr]eferences:? +#(\\d+)"
+      references-message = "**%(user)s** referenced this issue:\\n\\n**%(summary)s** %(gerritlink)s"
 
 
 Step 3:  Place a shell script in the gerrit environment::
@@ -65,6 +59,7 @@ import collections
 import configparser
 import difflib
 import json
+import os
 import requests
 import re
 from urllib.parse import urlparse, urlunparse
@@ -74,14 +69,13 @@ from . import core
 
 def grep_issue_numbers(regs, lines):
     outputs = collections.defaultdict(set)
-    summary = lines[0]
     for line in lines:
         for key, value in regs.items():
             match = re.match(value['reg'], line)
             if match:
                 outputs[key].add(match.group(1))
     return [
-        (regs[key]["comment"], value, summary)
+        (regs[key]["comment"], value)
         for key in outputs for value in outputs[key]
     ]
 
@@ -121,10 +115,11 @@ def get_gerrit_config(path):
 
 
 def publish_github_comment(access_token, repo, issue_number, message):
-    core.log("publish: %s %s %s" % (repo, issue_number, message))
     url = "https://api.github.com/repos/%s/issues/%s/comments" % (
         repo, issue_number
     )
+    core.log(url)
+    core.log(message)
     resp = requests.post(
         url,
         headers={"Authorization": "token %s" % access_token},
@@ -136,9 +131,23 @@ def publish_github_comment(access_token, repo, issue_number, message):
         core.log("Response: %s", resp.status_code)
 
 
+def fix_gerrit_config_value(value):
+    """the project.config parser is extremely rigid."""
+
+    value = value.strip('\'"')
+
+    # gerrit requires backslashes are doubled, so de-double them
+    value = value.replace('\\\\', '\\')
+
+    # allow newlines
+    value = value.replace('\\n', '\n')
+
+    return value
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser()
-    parser.add_argument("git_path", type=str)
+    parser.add_argument("gerrit_home", type=str)
     parser.add_argument("access_token", type=str)
     parser.add_argument("--project", type=str)
     parser.add_argument("--change", type=str)
@@ -155,9 +164,9 @@ def main(argv=None):
 
     opts = parser.parse_args(argv)
 
-    git_path = opts.git_path
+    gerrit_home = opts.gerrit_home
 
-    config = get_gerrit_config(git_path)
+    config = get_gerrit_config(os.path.join(gerrit_home, "git", opts.project + ".git"))
     try:
         section = config['label "github-comment"']
     except KeyError:
@@ -167,11 +176,17 @@ def main(argv=None):
         regs = {}
         github_repo = section["repo"]
 
+        # gerrit's config does not allow underscores in parameter names.
+        # only dashes.
         for key in section:
-            if key.endswith("_re"):
-                message = section["%s_message" % key[0:-3]].strip('\'"')
+            if key.endswith("-re"):
+
+                reg = fix_gerrit_config_value(section[key])
+                message = fix_gerrit_config_value(
+                    section["%s-message" % key[0:-3]])
+
                 regs[key[0:-3]] = {
-                    "reg": section[key].strip('\'"'),
+                    "reg": reg,
                     "comment": message
                 }
 
@@ -179,6 +194,8 @@ def main(argv=None):
 
     this_revision = get_gerrit_patchset_commit(
         service_url, opts.change, opts.patchset)
+
+    summary = this_revision['message'].split("\n")[0]
 
     if opts.patchset > 1:
         # look for lines that were added in this patchset
@@ -199,7 +216,7 @@ def main(argv=None):
         lines = this_revision['message'].split("\n")
         issue_numbers = grep_issue_numbers(regs, lines)
 
-    for message, issue_number, summary in issue_numbers:
+    for message, issue_number in issue_numbers:
         complete_message = message % {
             "user": opts.uploader_username,
             "gerritlink": opts.change_url,
