@@ -1,6 +1,5 @@
 import os
-from subprocess import check_call, CalledProcessError
-import sys
+from subprocess import check_call, check_output
 import contextlib
 
 
@@ -14,9 +13,17 @@ def update_git_mirror(path, origin, update_server_info=False):
         if update_server_info:
             call_cmd(["git", "update-server-info"])
 
+
+def git_show(path, branch, filename):
+    with chdir_as(path):
+        return call_cmd(
+            ["git", "show", "%s:%s" % (branch, filename)], output=True)
+
+
 def git_push(path, remote):
     with chdir_as(path):
         call_cmd(["git", "push", "--mirror", remote])
+
 
 def update_hg_mirror(path):
     """Update an hg repo
@@ -24,13 +31,20 @@ def update_hg_mirror(path):
     with chdir_as(path):
         call_cmd(["hg", "pull"])
 
+
 def hg_push(path, remote):
     with chdir_as(path):
         call_cmd(["hg", "push", remote])
 
-def call_cmd(args):
+
+def call_cmd(args, **kw):
     log(" ".join(args))
-    check_call(args)
+    output = kw.pop('output', False)
+    if output:
+        return check_output(args, encoding='utf-8')
+    else:
+        return check_call(args, **kw)
+
 
 @contextlib.contextmanager
 def chdir_as(path):
@@ -39,9 +53,11 @@ def chdir_as(path):
     yield
     os.chdir(currdir)
 
+
 def chdir(path):
     os.chdir(path)
     log("cd %s", path)
+
 
 def git_checkout_files(repo, work_dir, dirname):
     os.environ.pop('GIT_DIR', None)
@@ -55,6 +71,7 @@ def git_checkout_files(repo, work_dir, dirname):
         call_cmd(["git", "pull"])
     return checkout
 
+
 def hg_checkout_files(repo, work_dir, dirname):
     checkout = os.path.join(work_dir, dirname)
     if not os.path.exists(checkout):
@@ -67,13 +84,13 @@ def hg_checkout_files(repo, work_dir, dirname):
         call_cmd(["hg", "up"])
     return checkout
 
+
 def is_git(path):
-    return os.path.exists(os.path.join(path, ".git")) or \
-        (
-            os.path.exists(os.path.join(path, "config")) and
-            os.path.exists(os.path.join(path, "hooks")) and
-            os.path.exists(os.path.join(path, "refs"))
-        )
+    return os.path.exists(os.path.join(path, ".git")) or (
+        os.path.exists(os.path.join(path, "config")) and
+        os.path.exists(os.path.join(path, "hooks")) and
+        os.path.exists(os.path.join(path, "refs")))
+
 
 def is_hg(path):
     return os.path.exists(os.path.join(path, ".hg")) or \

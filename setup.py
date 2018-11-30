@@ -21,6 +21,8 @@ setup(name='publishthing',
           'console_scripts': [
               'publishthing = publishthing.publishthing:main',
               'update_all_dvcs = publishthing.update_all:main',
-              'sync_github_issues = publishthing.sync_gh_issues:main'
+              'sync_github_issues = publishthing.sync_gh_issues:main',
+              ('gerrit_patchset_comment = '
+               'publishthing.gerrit_patchset_comment:main')
           ],
       })
