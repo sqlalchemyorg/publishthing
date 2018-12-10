@@ -56,7 +56,7 @@ def mirror_git(mapping):
             payload = req.body
 
         if 'secret' in mapping:
-            response = enforce_secret(mapping['secret'], req)
+            response = enforce_secret(mapping['secret'], req, res)
             if response != 200:
                 return res(environ, start_response)
 
@@ -105,20 +105,26 @@ def mirror_git(mapping):
     return application
 
 
-def enforce_secret(secret, request):
+def enforce_secret(secret, request, response):
     # Only SHA1 is supported
     header_signature = request.headers.get('X-Hub-Signature')
     if header_signature is None:
+        response.status = 403
+        response.text = "Signed header required"
         return 403
 
     sha_name, signature = header_signature.split('=')
     if sha_name != 'sha1':
+        response.status = 501
+        response.text = "invalid signature"
         return 501
 
     # HMAC requires the key to be bytes, but data is string
     mac = hmac.new(str(secret), msg=request.data, digestmod='sha1')
 
     if not hmac.compare_digest(str(mac.hexdigest()), str(signature)):
+        response.status = 403
+        response.text = "invalid signature"
         return 403
 
     return 200
