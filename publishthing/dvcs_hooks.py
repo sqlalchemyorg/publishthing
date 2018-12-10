@@ -34,6 +34,7 @@ have to also be in the local mirror checkout using "git remote add".
 
 """
 
+import hmac
 from webob import Request, Response
 import json
 from .core import update_git_mirror, log, git_push
@@ -54,6 +55,11 @@ def mirror_git(mapping):
             # now
             payload = req.body
 
+        if 'secret' in mapping:
+            response = enforce_secret(mapping['secret'], req)
+            if response != 200:
+                return res(environ, start_response)
+
         if not payload:
             res.text = u"dvcs_hooks OK"
             return res(environ, start_response)
@@ -64,6 +70,7 @@ def mirror_git(mapping):
         except ValueError:
             log("couldn't parse payload")
             res.text = u"couldn't parse payload"
+            res.status = 400
             message = repo = None
         else:
             # github and bitbucket both have:
@@ -92,8 +99,26 @@ def mirror_git(mapping):
                         git_push(entry['local_repo'], push_to)
                 res.text = u"pushed repository %s" % repo
             else:
+                res.status = 404
                 res.text = u"Can't locate repository %s" % repo
         return res(environ, start_response)
     return application
 
 
+def enforce_secret(secret, request):
+    # Only SHA1 is supported
+    header_signature = request.headers.get('X-Hub-Signature')
+    if header_signature is None:
+        return 403
+
+    sha_name, signature = header_signature.split('=')
+    if sha_name != 'sha1':
+        return 501
+
+    # HMAC requires the key to be bytes, but data is string
+    mac = hmac.new(str(secret), msg=request.data, digestmod='sha1')
+
+    if not hmac.compare_digest(str(mac.hexdigest()), str(signature)):
+        return 403
+
+    return 200
