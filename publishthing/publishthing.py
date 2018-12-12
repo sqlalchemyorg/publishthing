@@ -75,8 +75,10 @@ def main(argv=None):
         "destination", choices=["local", "s3"], help="Destination")
     args = parser.parse_args(argv)
 
+    # where the git repo is.  the repo is bare.
     repo = os.path.abspath(args.source)
 
+    # this is techspot.zzzeek.org
     sitename = args.domain
     if not sitename:
         sitename = os.path.basename(repo)
@@ -84,11 +86,13 @@ def main(argv=None):
             sitename = sitename[0:-4]
     log("Site name %s", sitename)
 
+    # this is a sibling to the repo.
     work_dir = os.path.join(os.path.dirname(repo), "work")
     if not os.path.exists(work_dir):
         log("creating work directory %s", work_dir)
         os.mkdir(work_dir)
 
+    # then we do a git checkout into the work dir
     if args.type == 'hg':
         checkout = hg_checkout_files(repo, work_dir, sitename)
     elif args.type == 'git':
