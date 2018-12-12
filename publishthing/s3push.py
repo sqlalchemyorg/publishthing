@@ -1,15 +1,8 @@
-import os
-import threading
-import sys
-
-from .core import log
-
 from hashlib import md5
-
-if sys.version_info.major >= 3:
-    from queue import Queue
-else:
-    from Queue import Queue
+import os
+from queue import Queue
+import threading
+from . import publishthing  # noqa
 
 import boto
 import boto.s3.connection
@@ -35,8 +28,11 @@ def thread_queue(producer, consumer, num_workers=8):
         worker.join()
 
 
-def s3_upload(s3_bucket, lpath):
-    def producer(queue):
+def s3_upload(
+        thing: "publishthing.PublishThing",
+        s3_bucket: str, lpath: str) -> None:
+
+    def producer(queue: Queue) -> None:
         for root, dirs, files in os.walk(lpath):
             for lfile in files:
                 if os.path.basename(lfile).startswith("."):
@@ -46,7 +42,7 @@ def s3_upload(s3_bucket, lpath):
                         lpath + "/", "", 1)
                     queue.put((os.path.join(root, lfile), file))
 
-    def consumer(queue):
+    def consumer(queue: Queue) -> None:
         conn = boto.connect_s3(
             calling_format=boto.s3.connection.OrdinaryCallingFormat())
         bucket = conn.get_bucket(s3_bucket)
@@ -62,7 +58,7 @@ def s3_upload(s3_bucket, lpath):
             if key:
                 source_md5 = md5()
 
-                for chunk in open(source):
+                for chunk in open(source, 'rb'):
                     source_md5.update(chunk)
 
                 upload = key.etag[1:-1] != source_md5.hexdigest()
@@ -74,9 +70,9 @@ def s3_upload(s3_bucket, lpath):
                                                replace=True,
                                                policy="public-read")
 
-                log("uploaded %s", target)
+                thing.message("uploaded %s", target)
             else:
-                log("unchanged %s", target)
+                thing.message("unchanged %s", target)
                 key.make_public()
 
             item = queue.get()

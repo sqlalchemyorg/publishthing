@@ -19,9 +19,8 @@ setup(name='publishthing',
       install_requires=['webob', "boto", "requests"],
       entry_points={
           'console_scripts': [
-              'publishthing = publishthing.publishthing:main',
-              'update_all_dvcs = publishthing.update_all:main',
-              'sync_github_issues = publishthing.sync_gh_issues:main',
+              'publishthing = publishthing.apps.generate_site:main',
+              'sync_github_issues = publishthing.apps.sync_gh_issues:main',
               ('gerrit_patchset_comment = '
                'publishthing.gerrit_patchset_comment:main')
           ],

@@ -1,119 +1,68 @@
-#!/usr/bin/python
-import argparse
-import os
-from subprocess import check_call
-from .core import log, git_checkout_files, hg_checkout_files
-from . import s3push
+import logging
+from typing import Any
+from typing import Callable
+from typing import Optional
+
+from . import gerrit
+from . import git
+from . import github
+from . import publish
+from . import shell
+from .util import memoized_property
+from . import wsgi
+
+logging.basicConfig()
+logging.getLogger().setLevel(logging.DEBUG)
 
 
-def blogofile_build(checkout):
-    log("building with blogofile")
-    log("base dir %s", checkout)
-    os.chdir(checkout)
-    check_call(["blogofile", "build"])
-    return os.path.join(checkout, "_site")
+class PublishThing:
+    def __init__(self, **opts):
+        self.opts = opts
+
+    @memoized_property
+    def github_webhook(self) -> "github.GithubWebhook":
+        return github.GithubWebhook(self)
+
+    @memoized_property
+    def gerrit_hook(self) -> "gerrit.GerritHook":
+        return gerrit.GerritHook(self)
+
+    @memoized_property
+    def gerrit_api(self) -> "gerrit.GerritApi":
+        return gerrit.GerritApi(self)
+
+    def wsgi_request(
+            self, environ: dict,
+            start_response: Callable) -> "wsgi.WsgiRequest":
+        return wsgi.WsgiRequest(self, environ, start_response)
+
+    def github_repo(self, repo: str) -> "github.GithubRepo":
+        return github.GithubRepo(self, repo)
+
+    def git_repo(
+            self, path: str, origin: Optional[str] = None,
+            bare: bool = False, create: bool = False) -> "git.GitRepo":
+        return git.GitRepo(
+            self, path, origin=origin, bare=bare, create=create)
+
+    @memoized_property
+    def publisher(self) -> "publish.Publisher":
+        return publish.Publisher(self)
+
+    def message(self, message: str, *arg) -> None:
+        print(message % arg)
+
+    def warning(self, message: str, *arg: Any) -> None:
+        print(message % arg)
+
+    def debug(self, category: str, message: str, *arg: Any) -> None:
+        logger = logging.getLogger("%s.%s" % (__name__, category))
+        logger.debug(message, *arg)
+
+    def cmd_error(self, message: str) -> None:
+        raise Exception(message)
+
+    def shell_in(self, path: str, create: bool=False) -> "shell.Shell":
+        return shell.Shell(self, path, create)
 
 
-def zeekofile_build(checkout):
-    log("building with zeekofile")
-    log("base dir %s", checkout)
-    os.chdir(checkout)
-    check_call(["zeekofile", "build"])
-    return os.path.join(checkout, "_site")
-
-
-def publish_local(copy_from, sitename, local_base, local_prefix, dry):
-    site_location = os.path.join(local_base, sitename)
-    if not os.path.exists(site_location):
-        raise Exception("No such site: %s" % site_location)
-
-    dest = os.path.join(site_location, local_prefix)
-    log(
-        "%sCopying %s to %s",
-        "(dry) " if dry else "",
-        copy_from,
-        dest)
-    if not dry:
-        check_call(["bash", "-c", "cp -R %s/* %s" % (copy_from, dest)])
-
-
-def publish_s3(copy_from, sitename, dry):
-    log("%sPublishing %s to S3 bucket %s",
-        "(dry) " if dry else "",
-        copy_from,
-        sitename)
-    if not dry:
-        s3push.s3_upload(sitename, copy_from)
-
-
-def main(argv=None):
-    parser = argparse.ArgumentParser()
-
-    parser.add_argument(
-        "--blogofile", action="store_true", help="Run blogofile")
-    parser.add_argument(
-        "--zeekofile", action="store_true", help="Run zeekofile")
-    parser.add_argument(
-        "--type", choices=["git", "hg"],
-        help="Repository type", default="git")
-    parser.add_argument(
-        "--local-base", type=str,
-        help="Full path to local directory for sites")
-    parser.add_argument(
-        "--local-prefix", type=str,
-        help="Path prefix inside of a local site location")
-    parser.add_argument(
-        "--repo-prefix", type=str,
-        help="Optional path prefix inside the repo itself")
-    parser.add_argument(
-        "--dry", action="store_true", help="Don't actually publish")
-    parser.add_argument(
-        "--domain", type=str,
-        help="Fully qualified domain name, defaults to dirname of repo")
-    parser.add_argument("source", type=str, help="Source repository path")
-    parser.add_argument(
-        "destination", choices=["local", "s3"], help="Destination")
-    args = parser.parse_args(argv)
-
-    # where the git repo is.  the repo is bare.
-    repo = os.path.abspath(args.source)
-
-    # this is techspot.zzzeek.org
-    sitename = args.domain
-    if not sitename:
-        sitename = os.path.basename(repo)
-        if sitename.endswith(".git"):
-            sitename = sitename[0:-4]
-    log("Site name %s", sitename)
-
-    # this is a sibling to the repo.
-    work_dir = os.path.join(os.path.dirname(repo), "work")
-    if not os.path.exists(work_dir):
-        log("creating work directory %s", work_dir)
-        os.mkdir(work_dir)
-
-    # then we do a git checkout into the work dir
-    if args.type == 'hg':
-        checkout = hg_checkout_files(repo, work_dir, sitename)
-    elif args.type == 'git':
-        checkout = git_checkout_files(repo, work_dir, sitename)
-
-    if args.repo_prefix:
-        checkout = os.path.join(checkout, args.repo_prefix)
-
-    if args.blogofile:
-        copy_from = blogofile_build(checkout)
-    elif args.zeekofile:
-        copy_from = zeekofile_build(checkout)
-    else:
-        copy_from = checkout
-
-    if args.destination == "local":
-        publish_local(
-            copy_from, sitename, args.local_base,
-            args.local_prefix, args.dry)
-    elif args.destination == "s3":
-        publish_s3(copy_from, sitename, args.dry)
-
-if __name__ == '__main__':
-    main()
