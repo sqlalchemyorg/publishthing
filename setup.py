@@ -14,14 +14,12 @@ setup(name='publishthing',
       author_email='mike@zzzcomputing.com',
       url='http://bitbucket.org/zzzeek/publishthing',
       license='MIT',
-      packages=["publishthing"],
+      packages=["publishthing", "publishthing.apps"],
       zip_safe=False,
       install_requires=['webob', "boto", "requests"],
       entry_points={
           'console_scripts': [
               'publishthing = publishthing.apps.generate_site:main',
               'sync_github_issues = publishthing.apps.sync_gh_issues:main',
-              ('gerrit_patchset_comment = '
-               'publishthing.gerrit_patchset_comment:main')
           ],
       })
