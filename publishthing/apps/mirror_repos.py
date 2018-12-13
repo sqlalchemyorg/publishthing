@@ -58,6 +58,7 @@ def mirror_repos(
 
         repo = repo.strip("/")
 
+        thing.debug("mirror_repos", "Repo: %s", repo)
         if repo in mapping:
             entry = mapping[repo]
             git = thing.git_repo(entry['local_repo'], bare=True)

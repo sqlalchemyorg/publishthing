@@ -33,6 +33,7 @@ class Shell:
         return Shell(self.thing, os.path.normpath(path), create=create)
 
     def __enter__(self) -> "Shell":
+        self.thing.debug("shell", "cwd=%s" % self.path)
         return self
 
     def __exit__(self, *exc) -> bool:
