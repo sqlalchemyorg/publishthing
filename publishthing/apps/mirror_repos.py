@@ -53,15 +53,19 @@ def mirror_repos(
     def receive_push(
             event: github.GithubEvent, request: wsgi.WsgiRequest) -> None:
 
-        for repo_name, config in mapping.items():
-            if repo_name in mapping:
-                entry = mapping[repo_name]
-                git = thing.git_repo(entry['local_repo'], bare=True)
+        repository_message = event.json_data['repository']
+        repo = repository_message['full_name']
 
-                git.update_remote(entry['remote'])
-                request.add_text("updated remote %s", entry["remote"])
-                if 'push_to' in entry:
-                    for remote in entry['push_to']:
-                        git.push(remote, mirror=True)
-                        request.add_text("pushed remote %s", remote)
+        repo = repo.strip("/")
+
+        if repo in mapping:
+            entry = mapping[repo]
+            git = thing.git_repo(entry['local_repo'], bare=True)
+
+            git.update_remote(entry['remote'])
+            request.add_text("updated remote %s", entry["remote"])
+            if 'push_to' in entry:
+                for remote in entry['push_to']:
+                    git.push(remote, mirror=True)
+                    request.add_text("pushed remote %s", remote)
 
