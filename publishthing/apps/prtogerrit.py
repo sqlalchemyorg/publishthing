@@ -9,10 +9,12 @@ from .. import publishthing
 from .. import shell as _shell
 from .. import wsgi
 
+
 def prtogerrit(
         thing: publishthing.PublishThing,
         workdir: str,
-        wait_for_reviewer: str) -> None:
+        wait_for_reviewer: str,
+        git_email: str) -> None:
 
     def is_opened(event: github.GithubEvent):
         return event.json_data['action'] in (
@@ -51,7 +53,8 @@ def prtogerrit(
 
         with thing.shell_in(workdir).shell_in(owner, create=True) as shell:
 
-            git, gerrit_host = _setup_gerrit_for_pr_base(shell, pr, project)
+            git, gerrit_host = _setup_gerrit_for_pr_base(
+                shell, pr, project, wait_for_reviewer, git_email)
 
             _set_pr_into_commit(shell, git, event, pr)
 
@@ -60,10 +63,13 @@ def prtogerrit(
 
 def _setup_gerrit_for_pr_base(
         shell: _shell.Shell,
-        pr: github.GithubJsonRec, project: str) -> Tuple[_git.GitRepo, str]:
+        pr: github.GithubJsonRec, project: str,
+        git_identity: str, git_email: str) -> Tuple[_git.GitRepo, str]:
     # fetch base repository
     git = shell.git_repo(
         project, origin=pr['base']['repo']['git_url'], create=True)
+
+    git.set_identity(git_identity, git_email)
 
     # checkout the base branch as detached, usually master
     git.checkout(

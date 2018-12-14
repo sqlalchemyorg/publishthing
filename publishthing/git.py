@@ -87,6 +87,13 @@ class GitRepo:
                 args.append("--bare")
             self.shell.call_shell_cmd(*args)
 
+    def set_identity(self, git_identity: str, git_email: str) -> None:
+        with self.shell.shell_in(self.local_name) as shell:
+            shell.call_shell_cmd(
+                "git", "config", "--local", "user.name", git_identity)
+            shell.call_shell_cmd(
+                "git", "config", "--local", "user.email", git_email)
+
     def remote_ensure(self, remote: str, url: str) -> None:
         with self.shell.shell_in(self.local_name) as shell:
             try:
@@ -142,3 +149,4 @@ class GitRepo:
             args += ["--author", author]
         with self.shell.shell_in(self.local_name) as shell:
             shell.call_shell_cmd(*args)
+
