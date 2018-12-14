@@ -1,10 +1,9 @@
 import os
+from typing import Optional
 
 from . import publishthing  # noqa
 
-from typing import Optional
 from . import util
-
 
 class GitError(Exception):
     pass

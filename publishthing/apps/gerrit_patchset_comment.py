@@ -41,14 +41,16 @@ will post to the Github repository ``orgname/projectname``, to that issue
 number.
 
 """
-from .. import publishthing
-from typing import Dict
-from typing import List, Tuple, Any
-
 import collections
 import difflib
 import re
+from typing import Any
+from typing import Dict
+from typing import List
+from typing import Set
+from typing import Tuple
 
+from .. import publishthing
 
 def gerrit_patchset_comment(
         thing: publishthing.PublishThing,
@@ -108,9 +110,9 @@ def gerrit_patchset_comment(
 
 
 def _grep_issue_numbers(
-        regs: Dict[str, str],
+        regs: Dict[str, Dict[str, str]],
         lines: List[str]) -> List[Tuple[str, str]]:
-    outputs = collections.defaultdict(set)
+    outputs: Dict[str, Set[str]] = collections.defaultdict(set)
     for line in lines:
         for key, value in regs.items():
             match = re.match(value['reg'], line)

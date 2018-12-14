@@ -2,11 +2,11 @@ from hashlib import md5
 import os
 from queue import Queue
 import threading
-from . import publishthing  # noqa
 
 import boto
 import boto.s3.connection
 
+from . import publishthing  # noqa
 
 def thread_queue(producer, consumer, num_workers=8):
     workers = []

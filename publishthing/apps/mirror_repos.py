@@ -39,11 +39,12 @@ push from.  push_to is then a list of remotes to push to.  These remotes
 have to also be in the local mirror checkout using "git remote add".
 
 """
-from typing import Dict, Any
-from .. import publishthing
-from .. import github
-from .. import wsgi
+from typing import Any
+from typing import Dict
 
+from .. import github
+from .. import publishthing
+from .. import wsgi
 
 def mirror_repos(
         thing: publishthing.PublishThing,

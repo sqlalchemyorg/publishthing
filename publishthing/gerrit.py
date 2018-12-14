@@ -1,14 +1,16 @@
-import argparse
-from typing import List
-from . import publishthing  # noqa
-from .util import Hooks
-from typing import Dict, Any
+import json
 import os
 import sys
+from typing import Any
+from typing import Dict
+from typing import List
 
+import argparse
 import requests
-import json
 
+from . import publishthing  # noqa
+
+from .util import Hooks
 
 GerritJsonRec = Dict[str, Any]
 
@@ -23,7 +25,7 @@ class GerritApi:
         return self._gerrit_api_call(
             "changes/%s/revisions/%s/commit" % (change, patchset))
 
-    def _gerrit_api_call(self, path) -> GerritJsonRec:
+    def _gerrit_api_call(self, path: str) -> GerritJsonRec:
         url = "%s/a/%s" % (self.service_url, path)
         resp = requests.get(url, auth=(self.api_username, self.api_password))
 

@@ -1,17 +1,16 @@
+from types import TracebackType
 from typing import Any
 from typing import Callable
+from typing import Dict
 from typing import List
 from typing import Optional
-from typing import Dict
-from typing import Type
 from typing import Tuple
-from types import TracebackType
+from typing import Type
 
 from webob import Request
 from webob import Response
 
 from . import publishthing  # noqa
-
 
 ExcInfo = Tuple[Type[Exception], Exception, TracebackType]
 WsgiEnviron = Dict[str, str]

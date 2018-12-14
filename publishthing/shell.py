@@ -2,12 +2,11 @@ import json
 import os
 from subprocess import check_call
 from subprocess import check_output
-from typing import AnyStr
 from typing import Any
+from typing import AnyStr
 from typing import IO
 
 from . import publishthing  # noqa
-
 
 class Shell:
     def __init__(

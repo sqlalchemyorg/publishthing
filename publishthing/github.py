@@ -1,4 +1,3 @@
-import collections
 import hmac
 import json
 import re
@@ -11,12 +10,13 @@ from typing import List
 from typing import Optional
 from typing import Tuple
 from typing import Union
-from .util import Hooks
 
 import requests
 
 from . import wsgi  # noqa
 from . import publishthing  # noqa
+
+from .util import Hooks
 
 GithubJsonRec = Dict[str, Any]
 
@@ -116,7 +116,7 @@ class GithubRepo:
             headers={
                 "Authorization": "token %s" % self.access_token
             },
-            data=json.dumps(rec)
+            data=json.dumps(rec).encode('utf-8')
         )
         if resp.status_code > 299:
             raise Exception(

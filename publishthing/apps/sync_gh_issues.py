@@ -1,14 +1,16 @@
 import multiprocessing
 import multiprocessing.pool
 import os
-from typing import List
+from typing import Any
 from typing import Callable
+from typing import Iterator
+from typing import List
+from typing import Tuple
 
 import argparse
 
 from .. import github
 from .. import publishthing
-from typing import Iterator, Tuple, Any
 
 WORKERS = 10
 

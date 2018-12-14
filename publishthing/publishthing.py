@@ -16,7 +16,7 @@ logging.getLogger().setLevel(logging.DEBUG)
 
 
 class PublishThing:
-    def __init__(self, **opts):
+    def __init__(self, **opts: Any):
         self.opts = opts
 
     @memoized_property
@@ -32,8 +32,8 @@ class PublishThing:
         return gerrit.GerritApi(self)
 
     def wsgi_request(
-            self, environ: dict,
-            start_response: Callable) -> "wsgi.WsgiRequest":
+            self, environ: "wsgi.WsgiEnviron",
+            start_response: "wsgi.WsgiStartResponse") -> "wsgi.WsgiRequest":
         return wsgi.WsgiRequest(self, environ, start_response)
 
     def github_repo(self, repo: str) -> "github.GithubRepo":
