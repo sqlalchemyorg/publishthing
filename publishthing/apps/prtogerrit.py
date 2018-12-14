@@ -82,9 +82,9 @@ def _setup_gerrit_for_pr_base(
         gerrit_project = config['gerrit']['project']
 
     git.remote_ensure("gerrit", "https://%s:%s@%s/%s" % (
-        shell.thing.opts['secrets_gerrit_api_username'],
+        shell.thing.opts['gerrit_api_username'],
         urllib.parse.quote_plus(
-            shell.thing.opts['secrets_gerrit_api_password']),
+            shell.thing.opts['gerrit_api_password']),
         gerrit_host,
         gerrit_project
     ))
