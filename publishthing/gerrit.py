@@ -3,6 +3,8 @@ from typing import List
 from . import publishthing  # noqa
 from .util import Hooks
 from typing import Dict, Any
+import os
+import sys
 
 import requests
 import json
@@ -47,7 +49,6 @@ class GerritHook(Hooks):
         # hooks are at: https://gerrit.googlesource.com/plugins/hooks/+/refs/
         # heads/master/src/main/resources/Documentation/hooks.md#patchset_created
         parser = argparse.ArgumentParser()
-        parser.add_argument("hook", type=str)
         parser.add_argument("--abandoner", type=str)
         parser.add_argument("--abandoner-username", type=str)
         parser.add_argument("--author", type=str)
@@ -83,5 +84,6 @@ class GerritHook(Hooks):
             parser.add_argument("--%s-oldValue" % cat, type=int)
 
         opts = parser.parse_args(argv)
-        self.thing.debug("gerrithook", "event received: %s", opts)
-        self._run_hooks(opts.hook, opts)
+        hook = os.path.basename(sys.argv[0])
+        self.thing.debug("gerrithook", "event received: %s  (%s)", hook, opts)
+        self._run_hooks(hook, opts)

@@ -2,6 +2,8 @@
 
 Build a configuration .py as follows::
 
+    #!/usr/bin/env python3
+
     from publishthing.apps import gerrit_patchset_comment
     import publishthing
 
@@ -29,11 +31,10 @@ Build a configuration .py as follows::
     if __name__ == '__main__':
         thing.gerrit_hook.main()
 
-Then create a gerrit hook, in ``/var/gerrit/hooks/patchset-created``::
+Then create a symlink named after the gerrit hook, in
+``/var/gerrit/hooks/patchset-created``::
 
-    #!/bin/sh
-
-    python -m myconfig.py "patchset-created" "$@"
+    # ln -s myconfig.py /var/gerrit/hooks/patchset-created
 
 A new gerrit review to ``orgname/projectname`` that mentions an issue
 will post to the Github repository ``orgname/projectname``, to that issue
