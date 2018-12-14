@@ -6,6 +6,8 @@ from typing import List
 from typing import Optional
 from typing import Tuple
 
+from . import publishthing  # noqa
+
 class memoized_property:
     """A read-only @property that is only evaluated once."""
 
@@ -28,6 +30,8 @@ EventFilter = Callable[[Any], None]
 _HookRecord = Tuple[EventHook, Optional[EventFilter]]
 
 class Hooks:
+    thing : "publishthing.PublishThing"
+
     def __init__(self) -> None:
         self.hooks : Dict[
             str, List[_HookRecord]] = collections.defaultdict(list)
@@ -43,5 +47,6 @@ class Hooks:
     def _run_hooks(self, name: str, target: Any, *arg: Any, **kw: Any) -> None:
         for handler, filter_ in self.hooks.get(name, []):
             if filter_ is None or filter_(target):
+                self.thing.debug("hooks", "Running hook %s", handler)
                 handler(target, *arg, **kw)
 

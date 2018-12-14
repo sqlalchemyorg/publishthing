@@ -39,13 +39,13 @@ push from.  push_to is then a list of remotes to push to.  These remotes
 have to also be in the local mirror checkout using "git remote add".
 
 """
+import os
 from typing import Any
 from typing import Dict
 
 from .. import github
 from .. import publishthing
 from .. import wsgi
-
 
 def mirror_repos(
         thing: publishthing.PublishThing,
@@ -63,13 +63,18 @@ def mirror_repos(
         thing.debug("mirror_repos", "Repo: %s", repo)
         if repo in mapping:
             entry = mapping[repo]
-            git = thing.git_repo(entry['local_repo'], bare=True)
 
-            git.update_remote(entry['remote'])
-            request.add_text("repository: %s", repo)
-            request.add_text("updated remote %s", entry["remote"])
-            if 'push_to' in entry:
-                for remote in entry['push_to']:
-                    git.push(remote, mirror=True)
-                    request.add_text("pushed remote %s", remote)
+            path = os.path.dirname(entry['local_repo'])
+            local_name = os.path.basename(entry['local_repo'])
+
+            with thing.shell_in(path) as shell:
+                git = shell.git_repo(local_name, bare=True)
+
+                git.update_remote(entry['remote'])
+                request.add_text("repository: %s", repo)
+                request.add_text("updated remote %s", entry["remote"])
+                if 'push_to' in entry:
+                    for remote in entry['push_to']:
+                        git.push(remote, mirror=True)
+                        request.add_text("pushed remote %s", remote)
 

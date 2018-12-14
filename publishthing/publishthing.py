@@ -39,12 +39,6 @@ class PublishThing:
     def github_repo(self, repo: str) -> "github.GithubRepo":
         return github.GithubRepo(self, repo)
 
-    def git_repo(
-            self, path: str, origin: Optional[str] = None,
-            bare: bool = False, create: bool = False) -> "git.GitRepo":
-        return git.GitRepo(
-            self, path, origin=origin, bare=bare, create=create)
-
     @memoized_property
     def publisher(self) -> "publish.Publisher":
         return publish.Publisher(self)

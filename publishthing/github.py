@@ -131,6 +131,12 @@ class GithubRepo:
         )
         self._api_post(url, rec={"body": message})
 
+    def create_status(self, sha: str, body: GithubJsonRec) -> None:
+        url = "https://api.github.com/repos/%s/statuses/%s" % (
+            self.repo, sha
+        )
+        self._api_post(url, rec=body)
+
     def _yield_with_links(self, url: Optional[str]) -> \
             Iterator[GithubJsonRec]:
         while url is not None:
@@ -231,6 +237,10 @@ class GithubEvent:
         self.json_data = json_data
         self.event = event
         self.delivery = delivery
+
+    @property
+    def repo_name(self) -> str:
+        return self.json_data['repository']['full_name'].strip("/")
 
 
 class GithubWebhook(Hooks):

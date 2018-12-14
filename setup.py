@@ -1,6 +1,5 @@
 from setuptools import setup
 
-
 setup(name='publishthing',
       version=1.0,
       description="mike's homegrown static publishing thing",

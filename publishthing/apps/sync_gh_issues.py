@@ -15,9 +15,11 @@ from .. import publishthing
 
 WORKERS = 10
 
+JobList = List["multiprocessing.pool.AsyncResult[None]"]
+
 def run_jobs(
         iterator: Iterator[github.GithubJsonRec],
-        jobs: List["multiprocessing.pool.AsyncResult[None]"],
+        jobs: JobList,
         completed_callback: Callable[[int, bool], None]
     ) -> Iterator[github.GithubJsonRec]:
     idx = 0
@@ -59,7 +61,7 @@ def run_sync(gh: github.GithubRepo, destination: str) -> None:
 
         pool = multiprocessing.Pool(WORKERS)
 
-        jobs : List[multiprocessing.pool.AsyncResult[None]] = []
+        jobs : JobList = []
 
         def completed_callback(name: str) -> Callable[[int, bool], None]:
             def do_completed(idx: int, is_done: bool) -> None:

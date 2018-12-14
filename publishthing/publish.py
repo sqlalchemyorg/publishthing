@@ -1,10 +1,10 @@
 import os
 from typing import Optional
+
 from . import publishthing  # noqa
 
 from .git import GitRepo
 from . import s3push
-
 
 class Publisher:
     def __init__(self, thing: "publishthing.PublishThing") -> None:

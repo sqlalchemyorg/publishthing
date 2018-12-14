@@ -1,14 +1,21 @@
 import json
 import os
+from subprocess import CalledProcessError
 from subprocess import check_call
 from subprocess import check_output
 from typing import Any
 from typing import AnyStr
 from typing import IO
+from typing import Optional
 
 from . import publishthing  # noqa
 
+from . import git
+
 class Shell:
+
+    CalledProcessError: CalledProcessError = CalledProcessError
+
     def __init__(
             self, thing: "publishthing.PublishThing",
             path: str, create: bool = False) -> None:
@@ -51,7 +58,7 @@ class Shell:
             os.path.join(self.path, filename)
         )
 
-    def open(self, filename: str, mode: str) -> IO[AnyStr]:
+    def open(self, filename: str, mode: str = "r") -> IO[AnyStr]:
         path = os.path.join(self.path, filename)
         return open(path, mode)
 
@@ -70,4 +77,11 @@ class Shell:
         self.thing.message("Writing json to %s", path)
         with open(path, "w") as file_:
             json.dump(json_data, file_, indent=4)
+
+    def git_repo(
+            self, local_name: str, origin: Optional[str] = None,
+            bare: bool = False, create: bool = False) -> "git.GitRepo":
+        return git.GitRepo(
+            self.thing, self, local_name,
+            origin=origin, bare=bare, create=create)
 

@@ -2,7 +2,13 @@ from hashlib import md5
 import os
 from queue import Queue
 import threading
-from typing import Callable, IO, Any, Tuple, AnyStr, Optional
+from typing import Any
+from typing import AnyStr
+from typing import Callable
+from typing import IO
+from typing import Optional
+from typing import Tuple
+
 import boto
 import boto.s3.connection
 

@@ -1,6 +1,6 @@
 import os
-from typing import Optional
 from typing import List
+from typing import Optional
 
 import argparse
 
@@ -49,8 +49,7 @@ def main(argv: Optional[List[str]] = None) -> None:
     # make "work" sibling path to where the git repo is
     work_dir : str = os.path.join(os.path.dirname(repo_path), "work")
     with thing.shell_in(work_dir, create=True) as shell:
-        git_repo = thing.git_repo(
-            os.path.join(shell.path, sitename), origin=repo_path, create=True)
+        git_repo = shell.git_repo(sitename, origin=repo_path, create=True)
         git_repo.checkout("master")
 
 

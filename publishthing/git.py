@@ -2,6 +2,7 @@ import os
 from typing import Optional
 
 from . import publishthing  # noqa
+from . import shell as _shell  # noqa
 
 from . import util
 
@@ -12,42 +13,53 @@ class GitError(Exception):
 class GitRepo:
     def __init__(
             self, thing: "publishthing.PublishThing",
-            path: str, origin: Optional[str] = None,
+            shell: "_shell.Shell",
+            local_name: str,
+            origin: Optional[str] = None,
             bare: bool = False, create: bool = False) -> None:
         self.thing = thing
         self.origin = origin
-        self.path = path
+        self.shell = shell
+        self.local_name = local_name
         self.bare = bare
         self.create = create
         if not self._ensure():
             if create:
                 self._create()
             else:
-                raise GitError("No git repository at %s" % self.path)
+                raise GitError("No git repository at %s" % self.shell.path)
 
-    def checkout(self, branchname: str) -> None:
+    def checkout(
+            self, branchname: str, detached: Optional[bool] = False) -> None:
         self._assert_not_bare()
-        with self.thing.shell_in(self.path) as shell:
+        with self.shell.shell_in(self.local_name) as shell:
             shell.call_shell_cmd("git", "checkout", branchname)
-            shell.call_shell_cmd("git", "pull", "origin", branchname)
+            if not detached:
+                shell.call_shell_cmd("git", "pull", "origin", branchname)
+
+    def create_branch(self, branchname: str, force: bool=False) -> None:
+        self._assert_not_bare()
+        with self.shell.shell_in(self.local_name) as shell:
+            shell.call_shell_cmd(
+                "git", "checkout", "-B" if force else "-b", branchname)
 
     @property
     def checkout_location(self) -> str:
         self._assert_not_bare()
-        return self.path
+        return os.path.join(self.shell.path, self.local_name)
 
     def _assert_not_bare(self) -> None:
         if self.bare:
             raise GitError(
                 "Checkout %s is a bare repository, pulls and "
-                "file operations cannot be performed" % self.path)
+                "file operations cannot be performed" % self._git_bare_path)
 
     @util.memoized_property
     def _git_bare_path(self) -> str:
         if self.bare:
-            return self.path
+            return os.path.join(self.shell.path, self.local_name)
         else:
-            return os.path.join(self.path, ".git")
+            return os.path.join(self.shell.path, self.local_name, ".git")
 
     def _ensure_looks_like_git(self, path: str) -> None:
         for dirname in "refs", "objects":
@@ -64,21 +76,26 @@ class GitRepo:
         return True
 
     def _create(self) -> None:
-        if not os.path.exists(self.path):
-            workdir = os.path.dirname(self.path)
-            if not os.path.exists(workdir):
+        if not os.path.exists(self.checkout_location):
+            if not os.path.exists(self.shell.path):
                 raise GitError(
-                    "working directory '%s' does not exist" % workdir)
+                    "working directory '%s' does not exist" % self.shell.path)
             if self.origin is None:
                 raise GitError("no origin is defined")
-            with self.thing.shell_in(workdir) as shell:
-                args = ["git", "clone", self.origin, self.path]
-                if self.bare:
-                    args.append("--bare")
-                shell.call_shell_cmd(*args)
+            args = ["git", "clone", self.origin, self.local_name]
+            if self.bare:
+                args.append("--bare")
+            self.shell.call_shell_cmd(*args)
+
+    def remote_ensure(self, remote: str, url: str) -> None:
+        with self.shell.shell_in(self.local_name) as shell:
+            try:
+                shell.call_shell_cmd("git", "remote", "add", remote, url)
+            except shell.CalledProcessError:
+                shell.call_shell_cmd("git", "remote", "set-url", remote, url)
 
     def update_remote(self, remote: str) -> None:
-        with self.thing.shell_in(self.path) as shell:
+        with self.shell.shell_in(self.local_name) as shell:
             shell.call_shell_cmd("git", "remote", "update", "--prune", remote)
             shell.call_shell_cmd("git", "update-server-info")
 
@@ -87,5 +104,41 @@ class GitRepo:
         if mirror:
             args += ["--mirror"]
         args += [remote]
-        with self.thing.shell_in(self.path) as shell:
+        with self.shell.shell_in(self.local_name) as shell:
+            shell.call_shell_cmd(*args)
+
+    def pull(self, repository: str, branch: Optional[str] = None,
+             squash: bool = False) -> None:
+        args = ["git", "pull", repository]
+        if branch:
+            args += [branch]
+        if squash:
+            args += ["--squash"]
+        with self.shell.shell_in(self.local_name) as shell:
+            shell.call_shell_cmd(*args)
+
+    def reset(self, hard: bool=False) -> None:
+        args = ["git", "reset"]
+        if hard:
+            args += ["--hard"]
+        with self.shell.shell_in(self.local_name) as shell:
+            shell.call_shell_cmd(*args)
+
+    def read_author_from_squash_push(self) -> str:
+        self._assert_not_bare()
+        with self.shell.shell_in(self.local_name) as shell:
+            with shell.open(".git/SQUASH_MSG") as f:
+                for line in f:
+                    if line.startswith("Author:"):
+                        author = line[8:]
+                        return author
+                else:
+                    raise Exception("could not determine author for PR.")
+
+    def commit(self, comment: str, author: Optional[str] = None) -> None:
+        self._assert_not_bare()
+        args = ["git", "commit", "-m", comment]
+        if author:
+            args += ["--author", author]
+        with self.shell.shell_in(self.local_name) as shell:
             shell.call_shell_cmd(*args)
