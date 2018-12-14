@@ -35,14 +35,14 @@ class Shell:
         self.thing.debug("shell", "cwd=%s" % self.path)
         return self
 
-    def __exit__(self, *exc) -> bool:
+    def __exit__(self, *exc: Any) -> bool:
         return False
 
     def call_shell_cmd(self, *args: str) -> int:
         self.thing.debug("shell", " ".join(args))
         return check_call(args, cwd=self.path)
 
-    def output_shell_cmd(self, *args: str) -> str:
+    def output_shell_cmd(self, *args: str) -> Any:
         self.thing.debug("shell", " ".join(args))
         return check_output(args, encoding='utf-8', cwd=self.path)
 

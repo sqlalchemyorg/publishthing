@@ -50,7 +50,7 @@ def mirror_repos(
         thing: publishthing.PublishThing,
         mapping: Dict[str, Dict[str, Any]]) -> None:
 
-    @thing.github_webhook.event("push")
+    @thing.github_webhook.event("push")  # type: ignore
     def receive_push(
             event: github.GithubEvent, request: wsgi.WsgiRequest) -> None:
 

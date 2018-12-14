@@ -4,6 +4,7 @@ import sys
 from typing import Any
 from typing import Dict
 from typing import List
+from typing import Optional
 
 import argparse
 import requests
@@ -47,7 +48,7 @@ class GerritHook(Hooks):
             'gerrit_approval_categories', ())
         super(GerritHook, self).__init__()
 
-    def main(self, argv: List[str]=None) -> None:
+    def main(self, argv: Optional[List[str]] = None) -> None:
         # hooks are at: https://gerrit.googlesource.com/plugins/hooks/+/refs/
         # heads/master/src/main/resources/Documentation/hooks.md#patchset_created
         parser = argparse.ArgumentParser()

@@ -34,6 +34,7 @@ class Hooks:
 
     def event(self, event: str, filter_: Optional[EventFilter] = None) -> \
             Callable[[EventHook], EventHook]:
+
         def decorate(fn: EventHook) -> EventHook:
             self.hooks[event].append((fn, filter_))
             return fn

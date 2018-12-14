@@ -1,10 +1,12 @@
 import os
+from typing import Optional
+from typing import List
 
 import argparse
 
 from .. import publishthing
 
-def main(argv=None):
+def main(argv: Optional[List[str]] = None) -> None:
     parser = argparse.ArgumentParser()
 
     parser.add_argument(
@@ -47,8 +49,10 @@ def main(argv=None):
     # make "work" sibling path to where the git repo is
     work_dir : str = os.path.join(os.path.dirname(repo_path), "work")
     with thing.shell_in(work_dir, create=True) as shell:
-        git_repo = thing.git_repo(repo_path, shell.path, sitename, create=True)
+        git_repo = thing.git_repo(
+            os.path.join(shell.path, sitename), origin=repo_path, create=True)
         git_repo.checkout("master")
+
 
     copy_from : str
 
@@ -58,9 +62,9 @@ def main(argv=None):
         copy_from = thing.publisher.zeekofile_build(git_repo, args.repo_prefix)
     else:
         if args.repo_prefix:
-            copy_from = os.path.join(git_repo.git_checkout, args.repo_prefix)
+            copy_from = os.path.join(git_repo.checkout_location, args.repo_prefix)
         else:
-            copy_from = os.path.join(git_repo.git_checkout)
+            copy_from = os.path.join(git_repo.checkout_location)
 
     if args.destination == "local":
         thing.publisher.publish_local(

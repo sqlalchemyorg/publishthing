@@ -1,25 +1,27 @@
 import os
-
+from typing import Optional
 from . import publishthing  # noqa
 
 from .git import GitRepo
 from . import s3push
+
 
 class Publisher:
     def __init__(self, thing: "publishthing.PublishThing") -> None:
         self.thing = thing
 
     def blogofile_build(
-            self, git_checkout: GitRepo, subdir: str = None) -> str:
+            self, git_checkout: GitRepo, subdir: Optional[str] = None) -> str:
 
         return self._ofile_build("blogofile", git_checkout, subdir=subdir)
 
     def zeekofile_build(
-            self, git_checkout: GitRepo, subdir: str = None) -> str:
+            self, git_checkout: GitRepo, subdir: Optional[str] = None) -> str:
         return self._ofile_build("zeekofile", git_checkout, subdir=subdir)
 
     def _ofile_build(
-            self, cmd: str, git_checkout: GitRepo, subdir: str = None) -> str:
+            self, cmd: str, git_checkout: GitRepo,
+            subdir: Optional[str] = None) -> str:
         self.thing.message("building with %s", cmd)
 
         checkout = git_checkout.checkout_location

@@ -68,7 +68,7 @@ def gerrit_patchset_comment(
                 "comment": message
             }
 
-    @thing.gerrit_hook.event("patchset-created")
+    @thing.gerrit_hook.event("patchset-created")   # type: ignore
     def patchset_created(opts: Any) -> None:
         this_revision = thing.gerrit_api.get_patchset_commit(
             opts.change, opts.patchset)

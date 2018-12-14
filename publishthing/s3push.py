@@ -2,37 +2,19 @@ from hashlib import md5
 import os
 from queue import Queue
 import threading
-
+from typing import Callable, IO, Any, Tuple, AnyStr, Optional
 import boto
 import boto.s3.connection
 
 from . import publishthing  # noqa
 
-def thread_queue(producer, consumer, num_workers=8):
-    workers = []
-
-    queue = Queue()
-
-    for i in range(num_workers):
-        worker = threading.Thread(target=consumer, args=[queue])
-        worker.start()
-
-        workers.append(worker)
-
-    producer(queue)
-
-    for worker in workers:
-        queue.put(None)
-
-    for worker in workers:
-        worker.join()
-
+_WorkQueueItem = Optional[Tuple[str, str]]
 
 def s3_upload(
         thing: "publishthing.PublishThing",
         s3_bucket: str, lpath: str) -> None:
 
-    def producer(queue: Queue) -> None:
+    def producer(queue: "Queue[_WorkQueueItem]") -> None:
         for root, dirs, files in os.walk(lpath):
             for lfile in files:
                 if os.path.basename(lfile).startswith("."):
@@ -42,7 +24,7 @@ def s3_upload(
                         lpath + "/", "", 1)
                     queue.put((os.path.join(root, lfile), file))
 
-    def consumer(queue: Queue) -> None:
+    def consumer(queue: "Queue[_WorkQueueItem]") -> None:
         conn = boto.connect_s3(
             calling_format=boto.s3.connection.OrdinaryCallingFormat())
         bucket = conn.get_bucket(s3_bucket)
@@ -77,4 +59,32 @@ def s3_upload(
 
             item = queue.get()
 
-    thread_queue(producer, consumer)
+    _thread_queue(producer, consumer)
+
+
+
+def _thread_queue(
+        producer: Callable[["Queue[_WorkQueueItem]"], None],
+        consumer: Callable[["Queue[_WorkQueueItem]"], None],
+        num_workers: int=8) -> None:
+    workers = []
+
+    queue: "Queue[_WorkQueueItem]" = Queue()
+
+    for i in range(num_workers):
+        worker = threading.Thread(target=consumer, args=[queue])
+        worker.start()
+
+        workers.append(worker)
+
+    producer(queue)
+
+    # indicate to the workers to exit.
+    # should maybe use a threading.Event here.
+    for worker in workers:
+        queue.put(None)
+
+    for worker in workers:
+        worker.join()
+
+

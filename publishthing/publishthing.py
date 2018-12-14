@@ -49,7 +49,7 @@ class PublishThing:
     def publisher(self) -> "publish.Publisher":
         return publish.Publisher(self)
 
-    def message(self, message: str, *arg) -> None:
+    def message(self, message: str, *arg: Any) -> None:
         print(message % arg)
 
     def warning(self, message: str, *arg: Any) -> None:

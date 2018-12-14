@@ -5,6 +5,7 @@ from typing import Any
 from typing import Callable
 from typing import Iterator
 from typing import List
+from typing import Optional
 from typing import Tuple
 
 import argparse
@@ -16,9 +17,10 @@ WORKERS = 10
 
 
 def run_jobs(
-        iterator: Iterator[dict],
-        jobs: List[multiprocessing.pool.AsyncResult],
-        completed_callback: Callable) -> Iterator[dict]:
+        iterator: Iterator[github.GithubJsonRec],
+        jobs: List["multiprocessing.pool.AsyncResult[None]"],
+        completed_callback: Callable[[int, bool], None]
+    ) -> Iterator[github.GithubJsonRec]:
     idx = 0
     for idx, item in enumerate(iterator):
         yield item
@@ -58,10 +60,10 @@ def run_sync(gh: github.GithubRepo, destination: str) -> None:
 
         pool = multiprocessing.Pool(WORKERS)
 
-        jobs : List[multiprocessing.pool.AsyncResult] = []
+        jobs : List[multiprocessing.pool.AsyncResult[None]] = []
 
-        def completed_callback(name):
-            def do_completed(idx, is_done):
+        def completed_callback(name: str) -> Callable[[int, bool], None]:
+            def do_completed(idx: int, is_done: bool) -> None:
                 gh.thing.message(
                     "Completed %s %s, most recent updated at: %s",
                     idx, name, highest_timestamp)
@@ -134,7 +136,7 @@ def run_sync(gh: github.GithubRepo, destination: str) -> None:
 
 
 def _fetch_attachments(
-        gh: github.GithubRepo, path: str, attachments: List[str]):
+        gh: github.GithubRepo, path: str, attachments: List[str]) -> None:
     for filename, url in attachments:
         with gh.thing.shell_in(path).shell_in(
                 "attachments", create=True) as sub:
@@ -142,7 +144,7 @@ def _fetch_attachments(
             sub.write_file(filename, content, binary=True)
 
 
-def main(argv=None):
+def main(argv: Optional[List[str]] = None) -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "repo", type=str, help="user/reponame string on github")
