@@ -46,6 +46,7 @@ from .. import github
 from .. import publishthing
 from .. import wsgi
 
+
 def mirror_repos(
         thing: publishthing.PublishThing,
         mapping: Dict[str, Dict[str, Any]]) -> None:
@@ -65,6 +66,7 @@ def mirror_repos(
             git = thing.git_repo(entry['local_repo'], bare=True)
 
             git.update_remote(entry['remote'])
+            request.add_text("repository: %s", repo)
             request.add_text("updated remote %s", entry["remote"])
             if 'push_to' in entry:
                 for remote in entry['push_to']:

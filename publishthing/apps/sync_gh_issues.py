@@ -15,7 +15,6 @@ from .. import publishthing
 
 WORKERS = 10
 
-
 def run_jobs(
         iterator: Iterator[github.GithubJsonRec],
         jobs: List["multiprocessing.pool.AsyncResult[None]"],
