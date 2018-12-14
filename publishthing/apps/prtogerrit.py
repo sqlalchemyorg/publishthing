@@ -82,11 +82,14 @@ def _setup_gerrit_for_pr_base(
     # make sure gerrit remote is there
     config = ConfigParser.ConfigParser(interpolation=None)
 
+    # set up for gerrit.  we want to use https w/ username/password and
+    # git review doesn't do that
     with shell.shell_in(project) as gr_shell:
         config.read_file(gr_shell.open(".gitreview"))
         gerrit_host = config['gerrit']['host']
         gerrit_project = config['gerrit']['project']
 
+    # set up the gerrit remote based on https, not ssh
     git.remote_ensure("gerrit", "https://%s:%s@%s/%s" % (
         shell.thing.opts['gerrit_api_username'],
         urllib.parse.quote_plus(
@@ -94,6 +97,11 @@ def _setup_gerrit_for_pr_base(
         gerrit_host,
         gerrit_project
     ))
+
+    # now run git review, which will add commit hook to write the change-id,
+    # and use our https URL
+    with shell.shell_in(project) as gr_shell:
+        gr_shell.call_shell_cmd("git", "review", "-s")
 
     return git, gerrit_host
 
