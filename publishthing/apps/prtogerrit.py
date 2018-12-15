@@ -4,13 +4,14 @@ from .. import publishthing
 from .. import shell as _shell
 from .. import wsgi
 
+
 def prtogerrit(
         thing: publishthing.PublishThing,
         workdir: str,
         wait_for_reviewer: str,
         git_email: str) -> None:
 
-    def is_opened(event: github.GithubEvent):
+    def is_opened(event: github.GithubEvent) -> bool:
         return event.json_data['action'] in (
             "opened", "edited", "synchronize", "reopened")
 
@@ -33,11 +34,11 @@ def prtogerrit(
             }
         )
 
-    def is_reviewer_request(event: github.GithubEvent):
+    def is_reviewer_request(event: github.GithubEvent) -> bool:
         return event.json_data['action'] == "review_requested"
 
-    @thing.github_webhook.event(
-        "pull_request", is_reviewer_request)  # type: ignore
+    @thing.github_webhook.event(  # type: ignore
+        "pull_request", is_reviewer_request)
     def receive_push(
             event: github.GithubEvent, request: wsgi.WsgiRequest) -> None:
 
