@@ -75,7 +75,9 @@ class Shell:
     def output_shell_cmd_stdin(self, stdin: str, *args: str) -> Any:
         self.thing.debug("shell", " ".join(args))
         result = subprocess_run(
-            args, encoding='utf-8', cwd=self.path, capture_output=True,
+            args, encoding='utf-8', cwd=self.path,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
             input=stdin)
         return result.stdout.strip()
 
