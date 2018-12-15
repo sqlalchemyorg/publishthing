@@ -82,7 +82,7 @@ def prtogerrit(
             # get the author from the squash so we can maintain it
             author = git.read_author_from_squash_pull()
 
-            commit_msg = "%s\n\n%s%s\nCloses: #%s\nPull-request: %s" % (
+            commit_msg = "%s\n\n%s\n\nCloses: #%s\nPull-request: %s" % (
                 pr['title'],
                 pr['body'],
                 event.json_data['number'],
