@@ -56,7 +56,8 @@ class GerritGit:
             self.gerritconfig.read_file(gr_shell.open(".gitreview"))
 
         self._setup_repo_for_gerrit(
-            git_identity, git_email, git_remote_username, git_remote_password
+            git_identity, git_email,
+            git_remote_username, git_remote_password
         )
 
     def _setup_repo_for_gerrit(

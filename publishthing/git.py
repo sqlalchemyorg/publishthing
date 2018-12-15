@@ -54,6 +54,9 @@ class GitRepo:
 
     def checkout_shell(self) -> _shell.Shell:
         self._assert_not_bare()
+        return self.cmd_shell()
+
+    def cmd_shell(self) -> _shell.Shell:
         return self.shell.shell_in(self.local_name)
 
     def enable_gerrit(
@@ -103,22 +106,22 @@ class GitRepo:
             self.shell.call_shell_cmd(*args)
 
     def set_identity(self, git_identity: str, git_email: str) -> None:
-        with self.shell.shell_in(self.local_name) as shell:
+        with self.cmd_shell() as shell:
             shell.call_shell_cmd(
                 "git", "config", "--local", "user.name", git_identity)
             shell.call_shell_cmd(
                 "git", "config", "--local", "user.email", git_email)
 
     def remote_add(self, remote: str, url: str) -> None:
-        with self.shell.shell_in(self.local_name) as shell:
+        with self.cmd_shell() as shell:
             shell.call_shell_cmd("git", "remote", "add", remote, url)
 
     def remote_set_url(self, remote: str, url: str) -> None:
-        with self.shell.shell_in(self.local_name) as shell:
+        with self.cmd_shell() as shell:
             shell.call_shell_cmd("git", "remote", "set-url", remote, url)
 
     def update_remote(self, remote: str) -> None:
-        with self.shell.shell_in(self.local_name) as shell:
+        with self.cmd_shell() as shell:
             shell.call_shell_cmd("git", "remote", "update", "--prune", remote)
             shell.call_shell_cmd("git", "update-server-info")
 
@@ -127,7 +130,7 @@ class GitRepo:
         if mirror:
             args += ["--mirror"]
         args += [remote]
-        with self.shell.shell_in(self.local_name) as shell:
+        with self.cmd_shell() as shell:
             shell.call_shell_cmd(*args)
 
     def pull(self, repository: str, branch: Optional[str] = None,
@@ -137,19 +140,18 @@ class GitRepo:
             args += [branch]
         if squash:
             args += ["--squash"]
-        with self.shell.shell_in(self.local_name) as shell:
+        with self.cmd_shell() as shell:
             shell.call_shell_cmd(*args)
 
     def reset(self, hard: bool=False) -> None:
         args = ["git", "reset"]
         if hard:
             args += ["--hard"]
-        with self.shell.shell_in(self.local_name) as shell:
+        with self.cmd_shell() as shell:
             shell.call_shell_cmd(*args)
 
-    def read_author_from_squash_push(self) -> str:
-        self._assert_not_bare()
-        with self.shell.shell_in(self.local_name) as shell:
+    def read_author_from_squash_pull(self) -> str:
+        with self.checkout_shell() as shell:
             with shell.open(".git/SQUASH_MSG") as f:
                 for line in f:
                     if line.startswith("Author:"):
@@ -167,6 +169,6 @@ class GitRepo:
             args += ["--author", author]
         if amend:
             args += ["--amend"]
-        with self.shell.shell_in(self.local_name) as shell:
+        with self.checkout_shell() as shell:
             shell.call_shell_cmd(*args)
 
