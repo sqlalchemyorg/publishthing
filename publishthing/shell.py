@@ -3,6 +3,8 @@ import os
 from subprocess import CalledProcessError
 from subprocess import check_call
 from subprocess import check_output
+from subprocess import run as subprocess_run
+import subprocess
 from typing import Any
 from typing import AnyStr
 from typing import IO
@@ -12,9 +14,10 @@ from . import publishthing  # noqa
 
 from . import git
 
+
 class Shell:
 
-    CalledProcessError: CalledProcessError = CalledProcessError
+    CalledProcessError = CalledProcessError
 
     def __init__(
             self, thing: "publishthing.PublishThing",
@@ -49,9 +52,32 @@ class Shell:
         self.thing.debug("shell", " ".join(args))
         return check_call(args, cwd=self.path)
 
-    def output_shell_cmd(self, *args: str) -> Any:
+    def output_shell_cmd(
+            self, *args: str,
+            include_stderr: bool = False,
+            none_for_error: bool = False) -> Any:
         self.thing.debug("shell", " ".join(args))
-        return check_output(args, encoding='utf-8', cwd=self.path)
+
+        try:
+            if include_stderr:
+                return check_output(
+                    args, encoding='utf-8', cwd=self.path,
+                    stderr=subprocess.STDOUT).strip()
+            else:
+                return check_output(
+                    args, encoding='utf-8', cwd=self.path).strip()
+        except subprocess.CalledProcessError:
+            if none_for_error:
+                return None
+            else:
+                raise
+
+    def output_shell_cmd_stdin(self, stdin: str, *args: str) -> Any:
+        self.thing.debug("shell", " ".join(args))
+        result = subprocess_run(
+            args, encoding='utf-8', cwd=self.path, capture_output=True,
+            input=stdin)
+        return result.stdout.strip()
 
     def file_exists(self, filename: str) -> bool:
         return os.path.exists(

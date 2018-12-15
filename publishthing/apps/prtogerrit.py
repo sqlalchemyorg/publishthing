@@ -1,8 +1,3 @@
-import configparser as ConfigParser
-import re
-from typing import Tuple
-import urllib.parse
-
 from .. import git as _git
 from .. import github
 from .. import publishthing
@@ -53,23 +48,23 @@ def prtogerrit(
 
         with thing.shell_in(workdir).shell_in(owner, create=True) as shell:
 
-            git, gerrit_host = _setup_gerrit_for_pr_base(
+            git = _setup_gerrit_for_pr_base(
                 shell, pr, project, wait_for_reviewer, git_email)
 
             _set_pr_into_commit(shell, git, event, pr)
 
-            _publish_git_review(shell, git, event, project, gerrit_host)
+            _publish_git_review(shell, git, event, project)
 
 
 def _setup_gerrit_for_pr_base(
         shell: _shell.Shell,
-        pr: github.GithubJsonRec, project: str,
-        git_identity: str, git_email: str) -> Tuple[_git.GitRepo, str]:
-    # fetch base repository
+        pr: github.GithubJsonRec,
+        project: str,
+        git_identity: str,
+        git_email: str) -> _git.GitRepo:
+
     git = shell.git_repo(
         project, origin=pr['base']['repo']['git_url'], create=True)
-
-    git.set_identity(git_identity, git_email)
 
     # checkout the base branch as detached, usually master
     git.checkout(
@@ -79,31 +74,14 @@ def _setup_gerrit_for_pr_base(
         detached=True
     )
 
-    # make sure gerrit remote is there
-    config = ConfigParser.ConfigParser(interpolation=None)
-
-    # set up for gerrit.  we want to use https w/ username/password and
-    # git review doesn't do that
-    with shell.shell_in(project) as gr_shell:
-        config.read_file(gr_shell.open(".gitreview"))
-        gerrit_host = config['gerrit']['host']
-        gerrit_project = config['gerrit']['project']
-
-    # set up the gerrit remote based on https, not ssh
-    git.remote_ensure("gerrit", "https://%s:%s@%s/%s" % (
+    # sets everything up for gerrit
+    git.enable_gerrit(
+        git_identity, git_email,
         shell.thing.opts['gerrit_api_username'],
-        urllib.parse.quote_plus(
-            shell.thing.opts['gerrit_api_password']),
-        gerrit_host,
-        gerrit_project
-    ))
+        shell.thing.opts['gerrit_api_password']
+    )
 
-    # now run git review, which will add commit hook to write the change-id,
-    # and use our https URL
-    with shell.shell_in(project) as gr_shell:
-        gr_shell.call_shell_cmd("git", "review", "-s")
-
-    return git, gerrit_host
+    return git
 
 
 def _set_pr_into_commit(
@@ -135,50 +113,30 @@ def _set_pr_into_commit(
     # totally special thing
     author = git.read_author_from_squash_push()
 
-    body = pr['body']
-    change_id = re.match(r'(.*)(Change-Id: .*)', body, re.S)
-
     footer = "\nCloses: #%s\nPull-request: %s" % (
         event.json_data['number'],
         pr['html_url']
     )
 
-    if change_id:
-        commit_msg = "%s\n\n%s%s%s" % (
-            pr['title'],
-            change_id.group(1),
-            footer,
-            change_id.group(2)
-        )
-    else:
-        commit_msg = "%s\n\n%s%s" % (
-            pr['title'],
-            body,
-            footer
-        )
+    commit_msg = "%s\n\n%s%s" % (
+        pr['title'],
+        pr['body'],
+        footer
+    )
 
-    git.commit(commit_msg, author=author)
+    # gerrit commit will make sure the changelog is written
+    git.gerrit.commit(commit_msg, author=author)
 
 
 def _publish_git_review(
         shell: _shell.Shell, git: _git.GitRepo,
-        event: github.GithubEvent, project: str, gerrit_host: str) -> None:
+        event: github.GithubEvent, project: str) -> None:
 
-    with shell.shell_in(project) as gr_shell:
+    gerrit_link = git.gerrit.review()
 
-        output = gr_shell.output_shell_cmd("git", "review")
-
-        # pull the gerrit review link from the git review message
-        gerrit_link = re.search(
-            r'https://%s\S+' % gerrit_host, output, re.S)
-        if gerrit_link:
-            gerrit_link = gerrit_link.group(0)
-        else:
-            raise Exception("Could not locate PR link: %s" % output)
-
-        shell.thing.github_repo(event.repo_name).publish_issue_comment(
-            event.json_data['number'],
-            "Change has been squashed to Gerrit review: %s" % (
-                gerrit_link
-            )
+    shell.thing.github_repo(event.repo_name).publish_issue_comment(
+        event.json_data['number'],
+        "Change has been squashed to Gerrit review: %s" % (
+            gerrit_link
         )
+    )

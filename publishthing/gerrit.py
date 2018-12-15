@@ -8,8 +8,13 @@ from typing import Optional
 
 import argparse
 import requests
+import urllib.parse
 
+import re
+
+from . import git
 from . import publishthing  # noqa
+from configparser import ConfigParser
 
 from .util import Hooks
 
@@ -39,6 +44,105 @@ class GerritApi:
         body = resp.text.lstrip(")]}'")
 
         return json.loads(body)
+
+
+class GerritGit:
+    def __init__(self, git: git.GitRepo,
+                 git_identity: str, git_email: str,
+                 git_remote_username: str, git_remote_password: str) -> None:
+        self.git = git
+        self.git._assert_not_bare()
+        self.gerritconfig = ConfigParser(interpolation=None)
+        with self.git.checkout_shell() as gr_shell:
+            self.gerritconfig.read_file(gr_shell.open(".gitreview"))
+
+        self._setup_repo_for_gerrit(
+            git_identity, git_email, git_remote_username, git_remote_password
+        )
+
+    def _setup_repo_for_gerrit(
+        self, git_identity: str, git_email: str,
+            git_remote_username: str, git_remote_password: str) -> None:
+
+        with self.git.checkout_shell() as gr_shell:
+            username = gr_shell.output_shell_cmd(
+                "git", "config", "user.name", none_for_error=True)
+            useremail = gr_shell.output_shell_cmd(
+                "git", "config", "user.email", none_for_error=True)
+            if username != git_identity or useremail != git_email:
+                self.git.set_identity(git_identity, git_email)
+
+        # set up for gerrit.  we want to use https w/ username/password and
+        # git review doesn't do that
+        # set up the gerrit remote based on https, not ssh
+        gerrit_host = self.gerritconfig['gerrit']['host']
+        gerrit_project = self.gerritconfig['gerrit']['project']
+
+        with self.git.checkout_shell() as gr_shell:
+            url = "https://%s:%s@%s/%s" % (
+                git_remote_username,
+                urllib.parse.quote_plus(git_remote_password),
+                gerrit_host,
+                gerrit_project
+            )
+            remote = gr_shell.output_shell_cmd(
+                "git", "config", "remote.gerrit.url", none_for_error=True)
+            if remote is None:
+                self.git.remote_add("gerrit", url)
+            elif remote != url:
+                self.git.remote_set_url("gerrit", url)
+
+    def commit(
+            self, commit_msg: str,
+            author: Optional[str]=None, amend: bool=False) -> None:
+
+        change_id_match = re.search("Change-Id: .*", commit_msg)
+        self.git.commit(commit_msg, author=author, amend=amend)
+
+        # manually generate a change_id because apache under selinux can't
+        # run gerrit's commit-msg hook
+        if not change_id_match:
+            change_id = self._create_change_id(commit_msg)
+            commit_msg += "\nChange-Id: I%s" % change_id
+            self.git.commit(commit_msg, author=author, amend=True)
+
+    def review(self) -> str:
+        with self.git.checkout_shell() as gr_shell:
+            branch = self.gerritconfig['gerrit']['defaultbranch']
+            gerrit_host = self.gerritconfig['gerrit']['host']
+            output = gr_shell.output_shell_cmd(
+                "git", "push", "gerrit", "HEAD:refs/for/%s" % branch,
+                include_stderr=True)
+
+            # pull the gerrit review link from the git review message
+            gerrit_link = re.search(
+                r'https://%s\S+' % gerrit_host, output, re.S)
+            if gerrit_link:
+                return gerrit_link.group(0)
+            else:
+                raise Exception("Could not locate PR link: %s" % output)
+
+    def _create_change_id(self, change_msg: str) -> str:
+        with self.git.checkout_shell().shell_in(".git") as subshell:
+            payload = []
+            payload.append(
+                "tree %s" % subshell.output_shell_cmd("git", "write-tree"))
+            parent = subshell.output_shell_cmd(
+                "git", "rev-parse", "HEAD^0").strip()
+            if parent:
+                payload.append("parent %s" % parent)
+            payload.append(
+                "author %s" %
+                subshell.output_shell_cmd("git", "var", "GIT_AUTHOR_IDENT"))
+            payload.append(
+                "committer %s" %
+                subshell.output_shell_cmd("git", "var", "GIT_COMMITTER_IDENT"))
+            payload.append("\n%s" % change_msg)
+
+            change_id = subshell.output_shell_cmd_stdin(
+                "\n".join(payload),
+                "git", "hash-object", "-t", "commit", "--stdin")
+            return change_id
 
 
 class GerritHook(Hooks):

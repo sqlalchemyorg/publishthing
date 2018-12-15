@@ -3,14 +3,17 @@ from typing import Optional
 
 from . import publishthing  # noqa
 from . import shell as _shell  # noqa
-
+from . import gerrit
 from . import util
+
 
 class GitError(Exception):
     pass
 
 
 class GitRepo:
+    was_created = False
+
     def __init__(
             self, thing: "publishthing.PublishThing",
             shell: "_shell.Shell",
@@ -26,6 +29,7 @@ class GitRepo:
         if not self._ensure():
             if create:
                 self._create()
+                self.was_created = True
             else:
                 raise GitError("No git repository at %s" % self.shell.path)
 
@@ -47,6 +51,17 @@ class GitRepo:
     def checkout_location(self) -> str:
         self._assert_not_bare()
         return os.path.join(self.shell.path, self.local_name)
+
+    def checkout_shell(self) -> _shell.Shell:
+        self._assert_not_bare()
+        return self.shell.shell_in(self.local_name)
+
+    def enable_gerrit(
+        self, git_identity: str, git_email: str, git_remote_username: str,
+            git_remote_password: str) -> None:
+        self.gerrit = gerrit.GerritGit(
+            self, git_identity, git_email,
+            git_remote_username, git_remote_password)
 
     def _assert_not_bare(self) -> None:
         if self.bare:
@@ -94,12 +109,13 @@ class GitRepo:
             shell.call_shell_cmd(
                 "git", "config", "--local", "user.email", git_email)
 
-    def remote_ensure(self, remote: str, url: str) -> None:
+    def remote_add(self, remote: str, url: str) -> None:
         with self.shell.shell_in(self.local_name) as shell:
-            try:
-                shell.call_shell_cmd("git", "remote", "add", remote, url)
-            except shell.CalledProcessError:
-                shell.call_shell_cmd("git", "remote", "set-url", remote, url)
+            shell.call_shell_cmd("git", "remote", "add", remote, url)
+
+    def remote_set_url(self, remote: str, url: str) -> None:
+        with self.shell.shell_in(self.local_name) as shell:
+            shell.call_shell_cmd("git", "remote", "set-url", remote, url)
 
     def update_remote(self, remote: str) -> None:
         with self.shell.shell_in(self.local_name) as shell:
@@ -142,11 +158,15 @@ class GitRepo:
                 else:
                     raise Exception("could not determine author for PR.")
 
-    def commit(self, comment: str, author: Optional[str] = None) -> None:
+    def commit(
+            self, comment: str, author: Optional[str] = None,
+            amend: bool = False) -> None:
         self._assert_not_bare()
         args = ["git", "commit", "-m", comment]
         if author:
             args += ["--author", author]
+        if amend:
+            args += ["--amend"]
         with self.shell.shell_in(self.local_name) as shell:
             shell.call_shell_cmd(*args)
 
