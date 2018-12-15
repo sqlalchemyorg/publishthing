@@ -1,10 +1,10 @@
 import json
 import os
+import subprocess
 from subprocess import CalledProcessError
 from subprocess import check_call
 from subprocess import check_output
 from subprocess import run as subprocess_run
-import subprocess
 from typing import Any
 from typing import AnyStr
 from typing import IO
@@ -13,7 +13,6 @@ from typing import Optional
 from . import publishthing  # noqa
 
 from . import git
-
 
 class Shell:
 

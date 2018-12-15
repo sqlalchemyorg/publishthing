@@ -3,9 +3,9 @@ from typing import Optional
 
 from . import publishthing  # noqa
 from . import shell as _shell  # noqa
+
 from . import gerrit
 from . import util
-
 
 class GitError(Exception):
     pass

@@ -1,21 +1,20 @@
+from configparser import ConfigParser
 import json
 import os
+import re
 import sys
 from typing import Any
 from typing import Dict
 from typing import List
 from typing import Optional
+import urllib.parse
 
 import argparse
 import requests
-import urllib.parse
 
-import re
+from . import publishthing  # noqa
 
 from . import git
-from . import publishthing  # noqa
-from configparser import ConfigParser
-
 from .util import Hooks
 
 GerritJsonRec = Dict[str, Any]

@@ -4,7 +4,6 @@ from .. import publishthing
 from .. import shell as _shell
 from .. import wsgi
 
-
 def prtogerrit(
         thing: publishthing.PublishThing,
         workdir: str,
