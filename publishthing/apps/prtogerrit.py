@@ -123,8 +123,16 @@ def github_hook(
 def gerrit_hook(thing: publishthing.PublishThing) -> None:
 
     def includes_verify(opts: Any) -> bool:
-        return opts.Verified is not None and opts.Verified_oldValue is not None
+        return (
+            opts.Verified is not None and
+            opts.Verified_oldValue is not None) or (
+            opts.Code_Review is not None and
+            opts.Code_Review_oldValue is not None)
 
+    # unfortunately there's no gerrit event for "vote removed"
+    # in the hooks plugin, even though "stream events" has it.
+    # this will cause the github status to be wrong until another comment
+    # corrects it.
     @thing.gerrit_hook.event("patchset-created")   # type: ignore
     @thing.gerrit_hook.event("comment-added", includes_verify)   # type: ignore
     def verified_status_changed(opts: Any) -> None:
