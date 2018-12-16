@@ -1,10 +1,13 @@
-from .. import git as _git
+import re
+
+from typing import Any
 from .. import github
 from .. import publishthing
 from .. import shell as _shell
 from .. import wsgi
 
-def prtogerrit(
+
+def github_hook(
         thing: publishthing.PublishThing,
         workdir: str,
         wait_for_reviewer: str,
@@ -82,7 +85,7 @@ def prtogerrit(
                     event.json_data['pull_request']['head']['sha'],
                     "Failed to create a gerrit review, git squash "
                     "against branch '%s' failed" % target_branch,
-                    state="failure",
+                    state="error",
                     context="gerrit_review"
                 )
                 raise
@@ -90,11 +93,15 @@ def prtogerrit(
             # get the author from the squash so we can maintain it
             author = git.read_author_from_squash_pull()
 
-            commit_msg = "%s\n\n%s\n\nCloses: #%s\nPull-request: %s" % (
-                pr['title'],
-                pr['body'],
-                event.json_data['number'],
-                pr['html_url']
+            commit_msg = (
+                "%s\n\n%s\n\nCloses: #%s\nPull-request: %s\n"
+                "Pull-request-sha: %s\n" % (
+                    pr['title'],
+                    pr['body'],
+                    event.json_data['number'],
+                    pr['html_url'],
+                    event.json_data['pull_request']['head']['sha'],
+                )
             )
 
             # gerrit commit will make sure the change-id is written
@@ -107,8 +114,101 @@ def prtogerrit(
                 event.json_data['number'],
                 event.json_data['pull_request']['head']['sha'],
                 "Change has been squashed to Gerrit review",
-                state="pending",
+                state="success",
                 context="gerrit_review",
                 target_url=gerrit_link
             )
+            gh_repo.create_status(
+                event.json_data['pull_request']['head']['sha'],
+                state="pending",
+                description="Needs code review +2",
+                context="code_review",
+                target_url=gerrit_link
+            )
+            gh_repo.create_status(
+                event.json_data['pull_request']['head']['sha'],
+                state="pending",
+                description="Needs CI verified status",
+                context="ci_verification",
+                target_url=gerrit_link
+            )
+
+
+def gerrit_hook(thing: publishthing.PublishThing) -> None:
+
+    def includes_verify(opts: Any) -> bool:
+        return opts.Verified is not None and opts.Verified_oldValue is not None
+
+    @thing.gerrit_hook.event("comment-added", includes_verify)   # type: ignore
+    def verified_status_changed(opts: Any) -> None:
+        change_commit = thing.gerrit_api.get_change_current_commit(opts.change)
+
+        current_revision = change_commit["current_revision"]
+        message = change_commit["revisions"][
+            current_revision]["commit"]["message"]
+
+        search_url = (
+            r"Pull-request: https://github.com/%s/pull/(\d+)\n"
+            "Pull-request-sha: (.+?)\n" % (
+                opts.project,
+            )
+        )
+
+        pr_num_match = re.search(search_url, message, re.M)
+        if pr_num_match is None:
+            thing.debug(
+                "prtogerrit",
+                "Did not locate a pull request in comment for gerrit "
+                "review %s",
+                opts.change)
+            return
+
+        thing.debug(
+            "prtogerrit",
+            "Located pull request %s sha %s in gerrit review %s",
+            pr_num_match.group(1),
+            pr_num_match.group(2),
+            opts.change
+        )
+        detail = thing.gerrit_api.get_change_detail(opts.change)
+
+        verified = detail["labels"]["Verified"]
+        verified_approved = "approved" in verified
+        verified_rejected = "rejected" in verified
+        verified_neutral = not verified_approved and not verified_rejected
+
+        codereview = detail["labels"]["Code-Review"]
+        codereview_approved = "approved" in codereview
+        codereview_rejected = (
+            "disliked" in codereview or "rejected" in codereview
+        )
+        codereview_neutral = (
+            not codereview_approved and not codereview_rejected
+        )
+
+        gh_repo = thing.github_repo(opts.project)
+
+        for send, context, state, message in [
+            (verified_approved,
+             "ci_verification", "success", "Gerrit review has been verified"),
+            (verified_rejected, "ci_verification", "failure",
+             "Gerrit review has failed verification"),
+            (verified_neutral, "ci_verification", "pending",
+             "Needs CI verified status"),
+            (codereview_approved,
+             "code_review", "success", "Received code review +2"),
+            (codereview_rejected,
+             "code_review", "failure", "Code review has been rejected"),
+            (codereview_neutral, "code_review", "pending",
+             "Needs code review +2")
+        ]:
+            if send:
+                gh_repo.publish_pr_comment_w_status_change(
+                    pr_num_match.group(1),
+                    pr_num_match.group(2),
+                    message,
+                    state=state,
+                    context=context,
+                    target_url=opts.change_url
+                )
 

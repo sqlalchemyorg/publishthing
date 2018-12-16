@@ -30,6 +30,16 @@ class GerritApi:
         return self._gerrit_api_call(
             "changes/%s/revisions/%s/commit" % (change, patchset))
 
+    def get_change_detail(self, change: str) -> GerritJsonRec:
+        return self._gerrit_api_call(
+            "changes/%s/detail" % (change, )
+        )
+
+    def get_change_current_commit(self, change: str) -> GerritJsonRec:
+        return self._gerrit_api_call(
+            "changes/%s?o=CURRENT_REVISION&o=CURRENT_COMMIT" % (change, )
+        )
+
     def _gerrit_api_call(self, path: str) -> GerritJsonRec:
         url = "%s/a/%s" % (self.service_url, path)
         resp = requests.get(url, auth=(self.api_username, self.api_password))
@@ -156,6 +166,10 @@ class GerritHook(Hooks):
         # hooks are at: https://gerrit.googlesource.com/plugins/hooks/+/refs/
         # heads/master/src/main/resources/Documentation/hooks.md#patchset_created
         parser = argparse.ArgumentParser()
+        parser.add_argument(
+            "--hook", type=str,
+            help="optional hook name that overrides the program name as "
+            "the gerrit hook we are handling")
         parser.add_argument("--abandoner", type=str)
         parser.add_argument("--abandoner-username", type=str)
         parser.add_argument("--author", type=str)
@@ -191,6 +205,9 @@ class GerritHook(Hooks):
             parser.add_argument("--%s-oldValue" % cat, type=int)
 
         opts = parser.parse_args(argv)
-        hook = os.path.basename(sys.argv[0])
+        if opts.hook:
+            hook = opts.hook
+        else:
+            hook = os.path.basename(sys.argv[0])
         self.thing.debug("gerrithook", "event received: %s  (%s)", hook, opts)
         self._run_hooks(hook, opts)
