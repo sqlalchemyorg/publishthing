@@ -7,6 +7,7 @@ from typing import Any
 from typing import Dict
 from typing import List
 from typing import Optional
+from typing import Union
 import urllib.parse
 
 import argparse
@@ -18,6 +19,7 @@ from . import git
 from .util import Hooks
 
 GerritJsonRec = Dict[str, Any]
+GerritApiResult = Union[List[GerritJsonRec], GerritJsonRec]
 
 
 class GerritApi:
@@ -26,21 +28,33 @@ class GerritApi:
         self.api_username = thing.opts['gerrit_api_username']
         self.api_password = thing.opts['gerrit_api_password']
 
-    def get_patchset_commit(self, change: str, patchset: int) -> GerritJsonRec:
+    def get_patchset_commit(
+            self, change: str, patchset: int) -> GerritApiResult:
         return self._gerrit_api_call(
             "changes/%s/revisions/%s/commit" % (change, patchset))
 
-    def get_change_detail(self, change: str) -> GerritJsonRec:
+    def get_change_detail(self, change: str) -> GerritApiResult:
         return self._gerrit_api_call(
             "changes/%s/detail" % (change, )
         )
 
-    def get_change_current_commit(self, change: str) -> GerritJsonRec:
+    def get_change_current_commit(self, change: str) -> GerritApiResult:
         return self._gerrit_api_call(
             "changes/%s?o=CURRENT_REVISION&o=CURRENT_COMMIT" % (change, )
         )
 
-    def _gerrit_api_call(self, path: str) -> GerritJsonRec:
+    def search(self, **kw: str) -> GerritApiResult:
+        return self._gerrit_api_call(
+            "changes/?q=%s" % (
+                "+".join(
+                    '%s:"%s"' % (key, urllib.parse.quote(value))
+                    for key, value in kw.items()
+                )
+            )
+        )
+
+    def _gerrit_api_call(
+            self, path: str) -> GerritApiResult:
         url = "%s/a/%s" % (self.service_url, path)
         resp = requests.get(url, auth=(self.api_username, self.api_password))
 
@@ -104,8 +118,12 @@ class GerritGit:
 
     def commit(
             self, commit_msg: str,
-            author: Optional[str]=None, amend: bool=False) -> None:
+            author: Optional[str]=None, amend: bool=False,
+            change_id: Optional[str]=None) -> None:
 
+        # rewrite the message to not include Change-id:, since
+        # in any case it needs to be at the very bottom for gerrit
+        # to locate it reliably
         rewrite_lines = []
         change_id_match = None
         for line in commit_msg.split("\n"):
@@ -115,17 +133,21 @@ class GerritGit:
                     continue
             rewrite_lines.append(line)
 
-        if change_id_match:
+        # existing change id found, and a change id wasn't given,
+        # so write it in
+        if change_id_match and not change_id:
             rewrite_lines.append(change_id_match.group(0))
+        elif change_id:
+            rewrite_lines.append("Change-Id: %s" % change_id)
         commit_msg = "\n".join(rewrite_lines)
 
         self.git.commit(commit_msg, author=author, amend=amend)
 
-        # manually generate a change_id because apache under selinux can't
-        # run gerrit's commit-msg hook
-        if not change_id_match:
+        # manually generate a change_id and re-commit because apache under
+        # selinux can't run gerrit's commit-msg hook
+        if not change_id_match and not change_id:
             change_id = self._create_change_id(commit_msg)
-            commit_msg += "\nChange-Id: I%s" % change_id
+            commit_msg += "\nChange-Id: %s" % change_id
             self.git.commit(commit_msg, author=author, amend=True)
 
     def review(self) -> str:
@@ -164,7 +186,7 @@ class GerritGit:
             change_id = subshell.output_shell_cmd_stdin(
                 "\n".join(payload),
                 "git", "hash-object", "-t", "commit", "--stdin")
-            return change_id
+            return "I%s" % (change_id, )
 
 
 class GerritHook(Hooks):

@@ -85,7 +85,7 @@ def github_hook(
                 git.reset(hard=True)
                 gh_repo.publish_pr_comment_w_status_change(
                     event.json_data['number'],
-                    event.json_data['pull_request']['head']['sha'],
+                    pr['head']['sha'],
                     "Failed to create a gerrit review, git squash "
                     "against branch '%s' failed" % target_branch,
                     state="error",
@@ -96,20 +96,36 @@ def github_hook(
             # get the author from the squash so we can maintain it
             author = git.read_author_from_squash_pull()
 
+            pull_request_badge = "Pull-request: %s" % pr['html_url']
+
             commit_msg = (
-                "%s\n\n%s\n\nCloses: #%s\nPull-request: %s\n"
+                "%s\n\n%s\n\nCloses: #%s\n%s\n"
                 "Pull-request-sha: %s\n" % (
                     pr['title'],
                     pr['body'],
                     event.json_data['number'],
-                    pr['html_url'],
-                    event.json_data['pull_request']['head']['sha'],
+                    pull_request_badge,
+                    pr['head']['sha'],
                 )
             )
 
-            # gerrit commit will make sure the change-id is written
-            # without relying on a git commit hook
-            git.gerrit.commit(commit_msg, author=author)
+            results = thing.gerrit_api.search(
+                status="open", message=pull_request_badge)
+            if results:
+                # there should be only one, but in any case use the
+                # most recent, which is first in the list
+                existing_gerrit = results[0]
+            else:
+                existing_gerrit = None
+
+            if existing_gerrit:
+                git.gerrit.commit(
+                    commit_msg, author=author,
+                    change_id=existing_gerrit["change_id"])
+            else:
+                # gerrit commit will make sure the change-id is written
+                # without relying on a git commit hook
+                git.gerrit.commit(commit_msg, author=author)
 
             gerrit_link = git.gerrit.review()
 
