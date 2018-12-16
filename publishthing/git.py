@@ -35,11 +35,18 @@ class GitRepo:
 
     def checkout(
             self, branchname: str, detached: Optional[bool] = False) -> None:
-        self._assert_not_bare()
-        with self.shell.shell_in(self.local_name) as shell:
+        with self.checkout_shell() as shell:
             shell.call_shell_cmd("git", "checkout", branchname)
             if not detached:
                 shell.call_shell_cmd("git", "pull", "origin", branchname)
+
+    def fetch(self, all: bool=False) -> None:
+        with self.cmd_shell() as shell:
+            cmd = ["git", "fetch"]
+            if all:
+                cmd += ["--all"]
+
+            shell.call_shell_cmd(*cmd)
 
     def create_branch(self, branchname: str, force: bool=False) -> None:
         self._assert_not_bare()
