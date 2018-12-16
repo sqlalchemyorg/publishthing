@@ -106,7 +106,19 @@ class GerritGit:
             self, commit_msg: str,
             author: Optional[str]=None, amend: bool=False) -> None:
 
-        change_id_match = re.search("Change-Id: .*", commit_msg)
+        rewrite_lines = []
+        change_id_match = None
+        for line in commit_msg.split("\n"):
+            if not change_id_match:
+                change_id_match = re.search("^Change-Id: .*", line)
+                if change_id_match:
+                    continue
+            rewrite_lines.append(line)
+
+        if change_id_match:
+            rewrite_lines.append(change_id_match.group(0))
+        commit_msg = "\n".join(rewrite_lines)
+
         self.git.commit(commit_msg, author=author, amend=amend)
 
         # manually generate a change_id because apache under selinux can't

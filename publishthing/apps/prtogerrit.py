@@ -118,20 +118,6 @@ def github_hook(
                 context="gerrit_review",
                 target_url=gerrit_link
             )
-            gh_repo.create_status(
-                event.json_data['pull_request']['head']['sha'],
-                state="pending",
-                description="Needs code review +2",
-                context="code_review",
-                target_url=gerrit_link
-            )
-            gh_repo.create_status(
-                event.json_data['pull_request']['head']['sha'],
-                state="pending",
-                description="Needs CI verified status",
-                context="ci_verification",
-                target_url=gerrit_link
-            )
 
 
 def gerrit_hook(thing: publishthing.PublishThing) -> None:
@@ -139,6 +125,7 @@ def gerrit_hook(thing: publishthing.PublishThing) -> None:
     def includes_verify(opts: Any) -> bool:
         return opts.Verified is not None and opts.Verified_oldValue is not None
 
+    @thing.gerrit_hook.event("patchset-created")   # type: ignore
     @thing.gerrit_hook.event("comment-added", includes_verify)   # type: ignore
     def verified_status_changed(opts: Any) -> None:
         change_commit = thing.gerrit_api.get_change_current_commit(opts.change)
@@ -203,10 +190,9 @@ def gerrit_hook(thing: publishthing.PublishThing) -> None:
              "Needs code review +2")
         ]:
             if send:
-                gh_repo.publish_pr_comment_w_status_change(
-                    pr_num_match.group(1),
+                gh_repo.create_status(
                     pr_num_match.group(2),
-                    message,
+                    description=message,
                     state=state,
                     context=context,
                     target_url=opts.change_url
