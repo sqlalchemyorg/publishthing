@@ -3,13 +3,10 @@ import json
 import re
 import time
 from typing import Any
-from typing import Callable
 from typing import Dict
 from typing import Iterator
-from typing import List
 from typing import Optional
 from typing import Tuple
-from typing import Union
 
 import requests
 
@@ -125,17 +122,56 @@ class GithubRepo:
 
         return resp
 
+    def create_pr_review(
+            self, issue_number: str,
+            body: str,
+            sha: Optional[str] = None,
+            event: Optional[str] = None) -> None:
+
+        url = "https://api.github.com/repos/%s/pulls/%s/reviews" % (
+            self.repo, issue_number
+        )
+        rec = {"body": body}
+        if event:
+            rec['event'] = event
+        if sha:
+            rec['commit_id'] = sha
+        self._api_post(url, rec=rec)
+
     def publish_issue_comment(self, issue_number: str, message: str) -> None:
         url = "https://api.github.com/repos/%s/issues/%s/comments" % (
             self.repo, issue_number
         )
         self._api_post(url, rec={"body": message})
 
-    def create_status(self, sha: str, body: GithubJsonRec) -> None:
-        url = "https://api.github.com/repos/%s/statuses/%s" % (
-            self.repo, sha
-        )
+    def create_status(
+        self, sha: str, state: str, description: str, context: str,
+            target_url: Optional[str] = None) -> None:
+
+        url = "https://api.github.com/repos/%s/statuses/%s" % (self.repo, sha)
+        body = {"state": state, "description": description, "context": context}
+        if target_url:
+            body['target_url'] = target_url
         self._api_post(url, rec=body)
+
+    def publish_pr_comment_w_status_change(
+        self, issue_number: str, sha: str, message: str,
+            state: str, context: str,
+            target_url: Optional[str] = None) -> None:
+        """a combination of publish_issue_comment and create_status.
+
+        Since the github display for "status" alone is a little too low key
+        for folks to notice gerrit links and such.
+
+        """
+        if target_url:
+            comment_message = "%s: %s" % (message, target_url)
+        else:
+            comment_message = message
+
+        self.publish_issue_comment(issue_number, comment_message)
+        self.create_status(
+            sha, state, message, context, target_url=target_url)
 
     def _yield_with_links(self, url: Optional[str]) -> \
             Iterator[GithubJsonRec]:

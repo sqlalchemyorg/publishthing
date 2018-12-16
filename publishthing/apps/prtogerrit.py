@@ -17,20 +17,15 @@ def prtogerrit(
     @thing.github_webhook.event("pull_request", is_opened)  # type: ignore
     def make_pr_pending(
             event: github.GithubEvent, request: wsgi.WsgiRequest) -> None:
-        print("got event w/ %s action" % event.json_data['action'])
+        """as soon as a PR is created, we mark the status as "pending" to
+        indicate a particular reviewer needs to be added"""
 
         gh_repo = thing.github_repo(event.repo_name)
-        print(
-            "marking sha %s with pending" % (
-                event.json_data['pull_request']['head']['sha'], )
-        )
         gh_repo.create_status(
             event.json_data['pull_request']['head']['sha'],
-            {
-                "state": "pending",
-                "description": "This PR must be marked for review",
-                "context": "wait_for_reviewer"
-            }
+            state="pending",
+            description="Waiting for pull request to receive a reviewer",
+            context="gerrit_review"
         )
 
     def is_reviewer_request(event: github.GithubEvent) -> bool:
@@ -38,9 +33,18 @@ def prtogerrit(
 
     @thing.github_webhook.event(  # type: ignore
         "pull_request", is_reviewer_request)
-    def receive_push(
+    def review_requested(
             event: github.GithubEvent, request: wsgi.WsgiRequest) -> None:
 
+        gh_repo = thing.github_repo(event.repo_name)
+
+        gh_repo.create_pr_review(
+            event.json_data['number'],
+            "OK, this is **%s** setting up my work to try to get this PR into "
+            "gerrit so we can run tests and reviews and "
+            "stuff" % wait_for_reviewer,
+            event="COMMENT"
+        )
         owner, project = event.repo_name.split("/")
 
         pr = event.json_data['pull_request']
@@ -50,8 +54,9 @@ def prtogerrit(
             git = shell.git_repo(
                 project, origin=pr['base']['repo']['git_url'], create=True)
 
+            target_branch = pr['base']['ref']
             # checkout the base branch as detached, usually master
-            git.checkout("origin/%s" % (pr['base']['ref'], ), detached=True)
+            git.checkout("origin/%s" % (target_branch, ), detached=True)
 
             # sets everything up for gerrit
             git.enable_gerrit(
@@ -72,10 +77,13 @@ def prtogerrit(
                 )
             except _shell.CalledProcessError:
                 git.reset(hard=True)
-                thing.github_repo(event.repo_name).publish_issue_comment(
+                gh_repo.publish_pr_comment_w_status_change(
                     event.json_data['number'],
-                    "Failed to create a gerrit review for this PR, "
-                    "squash failed."
+                    event.json_data['pull_request']['head']['sha'],
+                    "Failed to create a gerrit review, git squash "
+                    "against branch '%s' failed" % target_branch,
+                    state="failure",
+                    context="gerrit_review"
                 )
                 raise
 
@@ -95,10 +103,12 @@ def prtogerrit(
 
             gerrit_link = git.gerrit.review()
 
-            thing.github_repo(event.repo_name).publish_issue_comment(
+            gh_repo.publish_pr_comment_w_status_change(
                 event.json_data['number'],
-                "Change has been squashed to Gerrit review: %s" % (
-                    gerrit_link
-                )
+                event.json_data['pull_request']['head']['sha'],
+                "Change has been squashed to Gerrit review",
+                state="pending",
+                context="gerrit_review",
+                target_url=gerrit_link
             )
 
