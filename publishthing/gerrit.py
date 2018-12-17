@@ -20,6 +20,7 @@ from .util import Hooks
 
 GerritJsonRec = Dict[str, Any]
 GerritApiResult = Union[List[GerritJsonRec], GerritJsonRec]
+GerritHookEvent = Any
 
 
 class GerritApi:
