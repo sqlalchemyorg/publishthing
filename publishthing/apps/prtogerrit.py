@@ -32,7 +32,12 @@ def github_hook(
         )
 
     def is_reviewer_request(event: github.GithubEvent) -> bool:
-        return event.json_data['action'] == "review_requested"
+        return \
+            event.json_data['action'] == "review_requested" and \
+            wait_for_reviewer in {
+                rec["login"] for rec in
+                event.json_data['pull_request']['requested_reviewers']
+            }
 
     @thing.github_webhook.event(  # type: ignore
         "pull_request", is_reviewer_request)
