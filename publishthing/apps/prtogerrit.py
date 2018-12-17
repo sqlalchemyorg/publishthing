@@ -261,6 +261,7 @@ def gerrit_hook(thing: publishthing.PublishThing) -> None:
     @thing.gerrit_hook.event("change-merged")   # type: ignore
     @thing.gerrit_hook.event("change-abandoned")   # type: ignore
     @thing.gerrit_hook.event("change-deleted")   # type: ignore
+    @thing.gerrit_hook.event("change-restored")   # type: ignore
     def change_merged_or_abandoned(opts: Any) -> None:
         pr_num_match = pr_for_gerrit_change(opts)
 
@@ -288,6 +289,15 @@ def gerrit_hook(thing: publishthing.PublishThing) -> None:
                 "at least for the moment I need to close this pull request. "
                 "Sorry it didn't work out :(" % opts.change_url
             )
-            gh_repo.close_pull_request(pr_num_match.group(1))
-
+            gh_repo.set_pull_request_status(pr_num_match.group(1), closed=True)
+        elif opts.hook == "change-restored":
+            gh_repo.publish_issue_comment(
+                pr_num_match.group(1),
+                "Gerrit review %s has been **restored**.  That means "
+                "I can reopen this pull request!  Hooray :)" % (
+                    opts.change_url
+                )
+            )
+            gh_repo.set_pull_request_status(
+                pr_num_match.group(1), closed=False)
 

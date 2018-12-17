@@ -192,10 +192,11 @@ class GithubRepo:
         self.create_status(
             sha, state, message, context, target_url=target_url)
 
-    def close_pull_request(self, issue_number: str) -> None:
+    def set_pull_request_status(
+            self, issue_number: str, closed: bool=True) -> None:
         url = "https://api.github.com/repos/%s/pulls/%s" % (
             self.repo, issue_number)
-        self._api_patch(url, rec={"state": "closed"})
+        self._api_patch(url, rec={"state": "closed" if closed else "open"})
 
     def _yield_with_links(self, url: Optional[str]) -> \
             Iterator[GithubJsonRec]:
