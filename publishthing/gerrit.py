@@ -226,6 +226,8 @@ class GerritHook(Hooks):
         parser.add_argument("--project", type=str)
         parser.add_argument("--reason", type=str)
         parser.add_argument("--refname", type=str)
+        parser.add_argument("--restorer", type=str)
+        parser.add_argument("--restorer-username", type=str)
         parser.add_argument("--reviewer", type=str)
         parser.add_argument("--reviewer-username", type=str)
         parser.add_argument("--submitter", type=str)
