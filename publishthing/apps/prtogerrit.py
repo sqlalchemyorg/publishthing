@@ -45,17 +45,17 @@ def github_hook(
             event: github.GithubEvent, request: wsgi.WsgiRequest) -> None:
 
         gh_repo = thing.github_repo(event.repo_name)
-
-        gh_repo.create_pr_review(
-            event.json_data['number'],
-            "OK, this is **%s** setting up my work to try to get this PR into "
-            "gerrit so we can run tests and reviews and "
-            "stuff" % wait_for_reviewer,
-            event="COMMENT"
-        )
         owner, project = event.repo_name.split("/")
 
         pr = event.json_data['pull_request']
+
+        gh_repo.create_pr_review(
+            event.json_data['number'],
+            "OK, this is **%s** setting up my work to try to get revision %s "
+            "of this pull request into gerrit so we can run tests and "
+            "reviews and stuff" % (wait_for_reviewer, pr['head']['sha']),
+            event="COMMENT"
+        )
 
         with thing.shell_in(workdir).shell_in(owner, create=True) as shell:
 
@@ -124,12 +124,14 @@ def github_hook(
                 existing_gerrit = None
 
             if existing_gerrit:
+                is_new_gerrit = False
                 git.gerrit.commit(
                     commit_msg, author=author,
                     change_id=existing_gerrit["change_id"])
             else:
                 # gerrit commit will make sure the change-id is written
                 # without relying on a git commit hook
+                is_new_gerrit = True
                 git.gerrit.commit(commit_msg, author=author)
 
             gerrit_link = git.gerrit.review()
@@ -137,10 +139,26 @@ def github_hook(
             gh_repo.publish_pr_comment_w_status_change(
                 event.json_data['number'],
                 event.json_data['pull_request']['head']['sha'],
-                "Change has been squashed to Gerrit review",
+                (
+                    "New Gerrit review created" if is_new_gerrit else
+                    "Patchset added to existing Gerrit review"
+                ),
                 state="success",
                 context="gerrit_review",
-                target_url=gerrit_link
+                target_url=gerrit_link,
+                long_message=(
+                    (
+                        "New Gerrit review created for change %s: %s" % (
+                            event.json_data['pull_request']['head']['sha'],
+                            gerrit_link
+                        )
+                    ) if is_new_gerrit else (
+                        "Patchset %s added to existing Gerrit review %s" % (
+                            event.json_data['pull_request']['head']['sha'],
+                            gerrit_link
+                        )
+                    )
+                )
             )
 
 

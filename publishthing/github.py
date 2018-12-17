@@ -157,14 +157,17 @@ class GithubRepo:
     def publish_pr_comment_w_status_change(
         self, issue_number: str, sha: str, message: str,
             state: str, context: str,
-            target_url: Optional[str] = None) -> None:
+            target_url: Optional[str] = None,
+            long_message: Optional[str] = None) -> None:
         """a combination of publish_issue_comment and create_status.
 
         Since the github display for "status" alone is a little too low key
         for folks to notice gerrit links and such.
 
         """
-        if target_url:
+        if long_message:
+            comment_message = long_message
+        elif target_url:
             comment_message = "%s: %s" % (message, target_url)
         else:
             comment_message = message
