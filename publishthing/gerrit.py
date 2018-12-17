@@ -242,6 +242,6 @@ class GerritHook(Hooks):
         if opts.hook:
             hook = opts.hook
         else:
-            hook = os.path.basename(sys.argv[0])
+            hook = opts.hook = os.path.basename(sys.argv[0])
         self.thing.debug("gerrithook", "event received: %s  (%s)", hook, opts)
         self._run_hooks(hook, opts)

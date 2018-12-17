@@ -1,6 +1,8 @@
 import re
 
 from typing import Any
+from typing import Optional
+from typing import Match
 from .. import github
 from .. import publishthing
 from .. import shell as _shell
@@ -164,20 +166,7 @@ def github_hook(
 
 def gerrit_hook(thing: publishthing.PublishThing) -> None:
 
-    def includes_verify(opts: Any) -> bool:
-        return (
-            opts.Verified is not None and
-            opts.Verified_oldValue is not None) or (
-            opts.Code_Review is not None and
-            opts.Code_Review_oldValue is not None)
-
-    # unfortunately there's no gerrit event for "vote removed"
-    # in the hooks plugin, even though "stream events" has it.
-    # this will cause the github status to be wrong until another comment
-    # corrects it.
-    @thing.gerrit_hook.event("patchset-created")   # type: ignore
-    @thing.gerrit_hook.event("comment-added", includes_verify)   # type: ignore
-    def verified_status_changed(opts: Any) -> None:
+    def pr_for_gerrit_change(opts: Any) -> Optional[Match[str]]:
         change_commit = thing.gerrit_api.get_change_current_commit(opts.change)
 
         current_revision = change_commit["current_revision"]
@@ -198,7 +187,7 @@ def gerrit_hook(thing: publishthing.PublishThing) -> None:
                 "Did not locate a pull request in comment for gerrit "
                 "review %s",
                 opts.change)
-            return
+            return None
 
         thing.debug(
             "prtogerrit",
@@ -207,6 +196,27 @@ def gerrit_hook(thing: publishthing.PublishThing) -> None:
             pr_num_match.group(2),
             opts.change
         )
+        return pr_num_match
+
+    def includes_verify(opts: Any) -> bool:
+        return (
+            opts.Verified is not None and
+            opts.Verified_oldValue is not None) or (
+            opts.Code_Review is not None and
+            opts.Code_Review_oldValue is not None)
+
+    # unfortunately there's no gerrit event for "vote removed"
+    # in the hooks plugin, even though "stream events" has it.
+    # this will cause the github status to be wrong until another comment
+    # corrects it.
+    @thing.gerrit_hook.event("patchset-created")   # type: ignore
+    @thing.gerrit_hook.event("comment-added", includes_verify)   # type: ignore
+    def verified_status_changed(opts: Any) -> None:
+        pr_num_match = pr_for_gerrit_change(opts)
+
+        if pr_num_match is None:
+            return
+
         detail = thing.gerrit_api.get_change_detail(opts.change)
 
         verified = detail["labels"]["Verified"]
@@ -247,4 +257,37 @@ def gerrit_hook(thing: publishthing.PublishThing) -> None:
                     context=context,
                     target_url=opts.change_url
                 )
+
+    @thing.gerrit_hook.event("change-merged")   # type: ignore
+    @thing.gerrit_hook.event("change-abandoned")   # type: ignore
+    @thing.gerrit_hook.event("change-deleted")   # type: ignore
+    def change_merged_or_abandoned(opts: Any) -> None:
+        pr_num_match = pr_for_gerrit_change(opts)
+
+        if pr_num_match is None:
+            return
+
+        gh_repo = thing.github_repo(opts.project)
+
+        if opts.hook == "change-merged":
+            gh_repo.publish_issue_comment(
+                pr_num_match.group(1),
+                "Gerrit review %s has been **merged**. "
+                "Congratulations! :)" % opts.change_url
+            )
+        elif opts.hook == "change-deleted":
+            gh_repo.publish_issue_comment(
+                pr_num_match.group(1),
+                "Gerrit review %s has been **deleted**. Hmm, maybe "
+                "the admins are doing something here." % opts.change_url
+            )
+        elif opts.hook == "change-abandoned":
+            gh_repo.publish_issue_comment(
+                pr_num_match.group(1),
+                "Gerrit review %s has been **abandoned**.  That means that "
+                "at least for the moment I need to close this pull request. "
+                "Sorry it didn't work out :(" % opts.change_url
+            )
+            gh_repo.close_pull_request(pr_num_match.group(1))
+
 

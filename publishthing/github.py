@@ -122,6 +122,22 @@ class GithubRepo:
 
         return resp
 
+    def _api_patch(self, url: str, rec: GithubJsonRec) -> requests.Response:
+        self._wait_for_api()
+        resp = self.session.patch(
+            url,
+            headers={
+                "Authorization": "token %s" % self.access_token
+            },
+            data=json.dumps(rec).encode('utf-8')
+        )
+        if resp.status_code > 299:
+            raise Exception(
+                "Got response %s for %s: %s" %
+                (resp.status_code, url, resp.content))
+
+        return resp
+
     def create_pr_review(
             self, issue_number: str,
             body: str,
@@ -175,6 +191,11 @@ class GithubRepo:
         self.publish_issue_comment(issue_number, comment_message)
         self.create_status(
             sha, state, message, context, target_url=target_url)
+
+    def close_pull_request(self, issue_number: str) -> None:
+        url = "https://api.github.com/repos/%s/pulls/%s" % (
+            self.repo, issue_number)
+        self._api_patch(url, rec={"state": "closed"})
 
     def _yield_with_links(self, url: Optional[str]) -> \
             Iterator[GithubJsonRec]:
