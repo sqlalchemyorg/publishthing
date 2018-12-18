@@ -39,12 +39,12 @@ class GerritApi:
             "changes/%s/detail" % (change, )
         )
 
-    def get_change_standalone_comments(self, change: str) -> GerritApiResult:
+    def get_change_standalone_comments(self, change: str) -> GerritJsonRec:
         return self._gerrit_api_call(
             "changes/%s?o=MESSAGES&o=DETAILED_ACCOUNTS" % (change, )
         )
 
-    def get_change_inline_comments(self, change: str) -> GerritApiResult:
+    def get_change_inline_comments(self, change: str) -> GerritJsonRec:
         return self._gerrit_api_call(
             "changes/%s/comments" % (change, )
         )
@@ -65,7 +65,7 @@ class GerritApi:
         )
 
     def _gerrit_api_call(
-            self, path: str) -> GerritApiResult:
+            self, path: str) -> Any:
         url = "%s/a/%s" % (self.service_url, path)
         resp = requests.get(url, auth=(self.api_username, self.api_password))
 

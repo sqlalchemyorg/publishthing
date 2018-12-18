@@ -118,12 +118,9 @@ def gerrit_hook(thing: publishthing.PublishThing) -> None:
             gh_repo.set_pull_request_status(
                 pull_request_match.number, closed=False)
 
-    def _compare_message(message: str, hook_message: str) -> bool:
-        return re.sub(r'\\.|\n|\t', '', message) == \
-            re.sub(r'\\.|\n|\t', '', hook_message)
-
     @thing.gerrit_hook.event("comment-added")  # type: ignore
     def mirror_reviews(opts: gerrit.GerritHookEvent) -> None:
+        """mirror comments posted to the gerrit review to the github PR."""
         hook_user = opts.author_username
 
         # skip if this is a bot comment
@@ -141,90 +138,100 @@ def gerrit_hook(thing: publishthing.PublishThing) -> None:
 
         change = opts.change
 
-        # get this set of comments from the API.   the commandline hook gives
-        # us no identifier or timestamp so we just search by text
         hook_comment = opts.comment
         hook_user = opts.author_username
 
-        comments = thing.gerrit_api.get_change_standalone_comments(change)
+        # index the comments for the gerrit
+        gerrit_comments = util.GerritComments(thing.gerrit_api, change)
 
-        for lead_comment in comments['messages']:
-            if lead_comment["author"]["username"] == hook_user and \
-                    _compare_message(lead_comment["message"], hook_comment):
-                lead_comment_date = lead_comment["date"]
-                break
-        else:
-            thing.debug(
-                "prtogerrit",
-                "Gerrit API returned no comment that matches user %s, "
-                "message start '%s...'", hook_user, hook_comment[0:25]
-            )
+        # the commandline hook gives us no identifier or timestamp so we just
+        # search by text and username, getting most recent comment first.
+        # Races are therefore possible here, in practice would require someone
+        # submitting two reviews within a second of each other.
+        lead_gerrit_comment = gerrit_comments.most_recent_comment_matching(
+            hook_user, hook_comment)
+        if lead_gerrit_comment is None:
+            thing.debug("prtogerrit",
+                        "Gerrit API returned no comment that matches "
+                        "user %s, message start '%s...'",
+                        hook_user, hook_comment[0:25])
             return
 
+        # index the comments on the PR
         gh_repo = thing.github_repo(opts.project)
-        pullreq = gh_repo.get_pull_request(pull_request_match.number)
-
-        # inline code comments, convert line numbers
-        inline_comments = thing.gerrit_api.get_change_inline_comments(change)
-
-        line_index = util.create_github_position_map(
-            gh_repo.get_pull_request_diff(pull_request_match.number)
-        )
+        pullreq = util.GithubPullRequestComments(
+            gh_repo, pull_request_match.number)
 
         outgoing_inline_comments = []
+        outgoing_inline_replies = []
         outgoing_external_line_comments = []
 
-        for path, comments in inline_comments.items():
-            for comment in comments:
-                timestamp = comment["updated"]
-                if timestamp == lead_comment_date:
-                    line_number = comment["line"]
-                    is_parent = comment.get('side', None) == 'PARENT'
+        for gerrit_file_comment in lead_gerrit_comment['line_comments']:
+            path = gerrit_file_comment['path']
+            line_number = gerrit_file_comment["line"]
+            is_parent = (gerrit_file_comment.get('side', None) == 'PARENT')
+            github_line = pullreq.convert_gerrit_line_number(
+                path, line_number, is_parent)
 
-                    github_line = line_index.get(
-                        (path, line_number, is_parent)
-                    )
-                    if github_line:
-                        outgoing_inline_comments.append({
-                            "path": path,
-                            "position": github_line,
+            if github_line is not None:
+                if gerrit_file_comment.get('in_reply_to', None):
+                    github_parent_comment = pullreq.get_lead_review_comment(
+                        path, github_line)
+
+                    if github_parent_comment:
+                        outgoing_inline_replies.append({
+                            "in_reply_to": github_parent_comment["id"],
                             "body": util.format_gerrit_comment_for_github(
-                                comment["author"]["name"],
-                                comment["author"]["username"],
-                                comment["message"],
+                                gerrit_file_comment["author"]["name"],
+                                gerrit_file_comment["author"]["username"],
+                                gerrit_file_comment["message"],
                             ),
                         })
-                    else:
-                        # gerrit lets you comment on any line in the whole
-                        # file, as well as on COMMIT_MSG, which aren't
-                        # available in github.  add these lines separately
-                        outgoing_external_line_comments.append(
-                            "* %s (line %s): %s" % (
-                                path, line_number, comment["message"]
-                            )
-                        )
+                        continue
 
-        comment_body = util.format_gerrit_comment_for_github(
-            lead_comment["author"]["name"],
-            lead_comment["author"]["username"],
-            lead_comment["message"],
+                outgoing_inline_comments.append({
+                    "path": path,
+                    "position": github_line,
+                    "body": util.format_gerrit_comment_for_github(
+                        gerrit_file_comment["author"]["name"],
+                        gerrit_file_comment["author"]["username"],
+                        gerrit_file_comment["message"],
+                    ),
+                })
+            else:
+                # gerrit lets you comment on any line in the whole
+                # file, as well as on COMMIT_MSG, which aren't
+                # available in github.  add these lines separately
+                outgoing_external_line_comments.append(
+                    "* %s (line %s): %s" % (
+                        path, line_number,
+                        gerrit_file_comment["message"]
+                    )
+                )
+
+        github_comment_body = util.format_gerrit_comment_for_github(
+            lead_gerrit_comment["author"]["name"],
+            lead_gerrit_comment["author"]["username"],
+            lead_gerrit_comment["message"],
         )
 
         if outgoing_inline_comments or outgoing_external_line_comments:
             if outgoing_external_line_comments:
-                comment_body += "\n\n" + "\n".join(
+                github_comment_body += "\n\n" + "\n".join(
                     outgoing_external_line_comments)
 
             github_review = {
-                "commit_id": pullreq['head']['sha'],
-                "body": comment_body,
+                "commit_id": pullreq.get_head_sha(),
+                "body": github_comment_body,
                 "event": "COMMENT",
                 "comments": outgoing_inline_comments,
             }
 
             # only publish as a review if we have inline comments.
-            gh_repo.publish_review(pull_request_match.number, github_review)
+            gh_repo.publish_review(pullreq.number, github_review)
         else:
             gh_repo.publish_issue_comment(
-                pull_request_match.number, comment_body)
-
+                pull_request_match.number, github_comment_body)
+        if outgoing_inline_replies:
+            for reply in outgoing_inline_replies:
+                gh_repo.publish_pr_review_comment(pullreq.number, reply)

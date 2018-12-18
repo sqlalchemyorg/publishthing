@@ -161,6 +161,17 @@ class GithubRepo:
         )
         return self._api_get(url).json()
 
+    def get_pull_request_comments(
+            self, issue_number: str) -> Iterator[GithubJsonRec]:
+
+        url = (
+            "https://api.github.com/repos/%s/pulls/%s/comments"
+            "?direction=asc&per_page=100" % (
+                self.repo, issue_number
+            )
+        )
+        return self._yield_with_links(url)
+
     def get_pull_request_diff(self, issue_number: str) -> str:
 
         url = "https://api.github.com/repos/%s/pulls/%s" % (
@@ -181,6 +192,14 @@ class GithubRepo:
             self.repo, issue_number
         )
         self._api_post(url, rec={"body": message})
+
+    def publish_pr_review_comment(
+            self, pullreq_number: str, comment_rec: GithubJsonRec) -> None:
+
+        url = "https://api.github.com/repos/%s/pulls/%s/comments" % (
+            self.repo, pullreq_number
+        )
+        self._api_post(url, rec=comment_rec)
 
     def create_status(
         self, sha: str, state: str, description: str, context: str,
