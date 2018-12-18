@@ -93,3 +93,10 @@ def create_github_position_map(
                         (patch.path, line.target_line_no, False)
                     ] = line.diff_line_no - line_offset
     return line_index
+
+
+def format_gerrit_comment_for_github(
+        author_fullname: str, author_username: str, message: str) -> str:
+    return "**%s** (%s) wrote:\n\n%s" % (
+        author_fullname, author_username, message
+    )
