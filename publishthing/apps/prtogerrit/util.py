@@ -2,6 +2,9 @@ from typing import NamedTuple
 import re
 from typing import Callable
 from typing import Optional
+from typing import Dict
+from typing import Tuple
+import unidiff
 
 from ... import gerrit
 from ... import github
@@ -70,3 +73,23 @@ def github_pr_is_reviewer_request(
                 event.json_data['pull_request']['requested_reviewers']
             }
     return is_reviewer_request
+
+
+def create_github_position_map(
+        unified_diff_text: str) -> Dict[Tuple[str, int, bool], str]:
+    line_index = {}
+    for patch in unidiff.PatchSet(unified_diff_text):
+        # github measures position relative to @@ per file,
+        # so create an offset for this file
+        line_offset = patch[0][0].diff_line_no - 1
+        for hunk in patch:
+            for line in hunk:
+                if line.source_line_no is not None:
+                    line_index[
+                        (patch.path, line.source_line_no, True)
+                    ] = line.diff_line_no - line_offset
+                if line.target_line_no is not None:
+                    line_index[
+                        (patch.path, line.target_line_no, False)
+                    ] = line.diff_line_no - line_offset
+    return line_index

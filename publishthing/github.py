@@ -91,14 +91,14 @@ class GithubRepo:
                 time.sleep(sleep_for)
         self._last_push_time = time.time()
 
-    def _api_get(self, url: str) -> requests.Response:
+    def _api_get(
+            self, url: str,
+            headers: Optional[Dict[str, str]]=None) -> requests.Response:
         self._wait_for_api()
-        resp = self.session.get(
-            url,
-            headers={
-                "Authorization": "token %s" % self.access_token
-            }
-        )
+        _headers = {"Authorization": "token %s" % self.access_token}
+        if headers:
+            _headers.update(headers)
+        resp = self.session.get(url, headers=_headers)
         if resp.status_code != 200:
             raise Exception(
                 "Got response %s for %s: %s" %
@@ -153,6 +153,28 @@ class GithubRepo:
         if sha:
             rec['commit_id'] = sha
         self._api_post(url, rec=rec)
+
+    def get_pull_request(self, issue_number: str) -> GithubJsonRec:
+
+        url = "https://api.github.com/repos/%s/pulls/%s" % (
+            self.repo, issue_number
+        )
+        return self._api_get(url).json()
+
+    def get_pull_request_diff(self, issue_number: str) -> str:
+
+        url = "https://api.github.com/repos/%s/pulls/%s" % (
+            self.repo, issue_number
+        )
+        return self._api_get(
+            url, headers={"Accept": "application/vnd.github.v3.diff"}).text
+
+    def publish_review(self, issue_number: str,
+                       github_review: GithubJsonRec) -> None:
+        url = "https://api.github.com/repos/%s/pulls/%s/reviews" % (
+            self.repo, issue_number
+        )
+        self._api_post(url, rec=github_review)
 
     def publish_issue_comment(self, issue_number: str, message: str) -> None:
         url = "https://api.github.com/repos/%s/issues/%s/comments" % (

@@ -39,6 +39,16 @@ class GerritApi:
             "changes/%s/detail" % (change, )
         )
 
+    def get_change_standalone_comments(self, change: str) -> GerritApiResult:
+        return self._gerrit_api_call(
+            "changes/%s?o=MESSAGES&o=DETAILED_ACCOUNTS" % (change, )
+        )
+
+    def get_change_inline_comments(self, change: str) -> GerritApiResult:
+        return self._gerrit_api_call(
+            "changes/%s/comments" % (change, )
+        )
+
     def get_change_current_commit(self, change: str) -> GerritApiResult:
         return self._gerrit_api_call(
             "changes/%s?o=CURRENT_REVISION&o=CURRENT_COMMIT" % (change, )

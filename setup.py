@@ -15,7 +15,7 @@ setup(name='publishthing',
       license='MIT',
       packages=["publishthing", "publishthing.apps"],
       zip_safe=False,
-      install_requires=['webob', "boto", "requests"],
+      install_requires=['webob', "boto", "requests", "unidiff"],
       entry_points={
           'console_scripts': [
               'publishthing = publishthing.apps.generate_site:main',
