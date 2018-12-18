@@ -87,7 +87,7 @@ def format_gerrit_comment_for_github(
     # strip out email address if present, some events include it
     if "@" in author_fullname:
         author_fullname = re.sub(
-            r'[\w_\.]+@[\w_\.]+', '', author_fullname).strip()
+            r'<?[\w_\.]+@[\w_\.]+>?', '', author_fullname).strip()
 
     return "**%s** (%s) wrote:\n\n%s" % (
         author_fullname, author_username, message
