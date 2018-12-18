@@ -89,6 +89,8 @@ def format_gerrit_comment_for_github(
         author_fullname = re.sub(
             r'<?[\w_\.]+@[\w_\.]+>?', '', author_fullname).strip('" ')
 
+    message = re.sub(r'^\s*Patch Set \d+:\s*', '', message)
+
     return "**%s** (%s) wrote:\n\n%s" % (
         author_fullname, author_username, message
     )
