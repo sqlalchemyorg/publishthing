@@ -32,7 +32,7 @@ def github_hook(
 
     @thing.github_webhook.event(  # type: ignore
         "pull_request", util.github_pr_is_reviewer_request(wait_for_reviewer))
-    def review_requested(
+    def create_new_gerrit_for_review_request(
             event: github.GithubEvent, request: wsgi.WsgiRequest) -> None:
 
         gh_repo = thing.github_repo(event.repo_name)
@@ -157,8 +157,10 @@ def github_hook(
     # reviews, not review comments separately
     @thing.github_webhook.event("pull_request_review",
                                 util.github_pr_review_is_submitted)
-    def mirror_pr_comments(
+    def mirror_pr_reviews(
             event: github.GithubEvent, request: wsgi.WsgiRequest) -> None:
+        """Receive GitHub pull request reviews and comments and mirror to
+        the Gerrit review."""
 
         pr = event.json_data["pull_request"]
 
@@ -232,7 +234,9 @@ def github_hook(
             gh_repo, pr['number'], existing_pullreq=pr
         )
 
-        inline_comments : Dict[str, List[Dict[str, Union[str, int]]]] = collections.defaultdict(list)
+        inline_comments : Dict[
+            str, List[Dict[str, Union[str, int]]]
+        ] = collections.defaultdict(list)
         non_inline_comments = []
 
         for comment in comments_to_post:
@@ -273,6 +277,59 @@ def github_hook(
         review = {
             "message": message,
             "comments": inline_comments
+        }
+
+        thing.gerrit_api.set_review(
+            existing_gerrit["id"], gerrit_revision_sha, review)
+
+    @thing.github_webhook.event("issue_comment",
+                                util.github_comment_is_pullrequest)
+    def mirror_pr_comments(
+            event: github.GithubEvent, request: wsgi.WsgiRequest) -> None:
+        """Receive GitHub issue comments on pull requests and mirror to
+        the Gerrit review."""
+
+        issue = event.json_data["issue"]
+        pr = issue["pull_request"]
+        comment = event.json_data["comment"]
+
+        github_user = comment["user"]["login"]
+
+        # skip if this is a bot comment/review, as that would produce
+        # endless loops
+        if github_user in set(
+            thing.opts.get('ignore_comment_usernames', [])
+        ).union([thing.opts['github_api_username']]):
+            thing.debug(
+                "prtogerrit",
+                "Gerrit user %s is in the ignore list, "
+                "not mirroring comment / pullrequest", github_user)
+            return
+
+        # search in gerrit reviews for this pull request URL
+        # in commit comments
+        pull_request_badge = "Pull-request: %s" % pr['html_url']
+        results = thing.gerrit_api.search(message=pull_request_badge)
+
+        if results:
+            # there should be only one, but in any case use the
+            # most recent, which is first in the list
+            existing_gerrit = results[0]
+        else:
+            thing.debug("prtogerrit",
+                        "Can't find a gerrit review for pull request: %s",
+                        pr['html_url'])
+            return
+
+        gerrit_revision = thing.gerrit_api.get_change_current_revision(
+            existing_gerrit['id'])
+
+        gerrit_revision_sha = gerrit_revision["current_revision"]
+        message = util.format_github_comment_for_gerrit(
+            github_user, comment["body"])
+
+        review = {
+            "message": message,
         }
 
         thing.gerrit_api.set_review(

@@ -5,6 +5,7 @@ from ... import gerrit
 from ... import publishthing
 from . import util
 
+
 def gerrit_hook(thing: publishthing.PublishThing) -> None:
 
     # unfortunately there's no gerrit event for "vote removed"
@@ -16,6 +17,9 @@ def gerrit_hook(thing: publishthing.PublishThing) -> None:
         "comment-added",
         util.gerrit_comment_includes_verify)
     def verified_status_changed(opts: gerrit.GerritHookEvent) -> None:
+        """receive events where verified/code-review status can change and
+        send status updates to the pull request"""
+
         pull_request_match = util.get_pullreq_for_gerrit_change(thing, opts)
 
         if pull_request_match is None:

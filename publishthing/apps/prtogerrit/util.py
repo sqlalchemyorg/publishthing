@@ -18,6 +18,9 @@ from ... import publishthing
 from ...util import memoized_property
 
 class PullRequestRec(NamedTuple):
+    """A key referring to a specific version of a github pull request,
+    which we serialize into the commit messages of the changesets we
+    push to gerrit."""
     number: str
     sha: str
 
@@ -94,6 +97,8 @@ def github_pr_review_is_submitted(event: github.GithubEvent) -> bool:
 def github_pr_comment_is_created(event: github.GithubEvent) -> bool:
     return bool(event.json_data['action'] == "created")
 
+def github_comment_is_pullrequest(event: github.GithubEvent)-> bool:
+    return bool(event.json_data["issue"].get("pull_request"))
 
 def github_pr_is_reviewer_request(
         wait_for_reviewer: str) -> Callable[[github.GithubEvent], bool]:
@@ -132,6 +137,9 @@ def format_github_comment_for_gerrit(
 
 
 class GerritComments:
+    """operations and services specific to the list of comments on a
+    gerrit review."""
+
     def __init__(self, gerrit_api: gerrit.GerritApi, change: str) -> None:
         gerrit_comments = gerrit_api.\
             get_change_standalone_comments(change)['messages']
@@ -189,6 +197,8 @@ class GerritComments:
 
 
 class GithubPullRequest:
+    """operations and services specific to a pull request record."""
+
     def __init__(
             self, gh_repo: github.GithubRepo, issue_num: str,
             existing_pullreq: Optional[github.GithubJsonRec]=None) -> None:
