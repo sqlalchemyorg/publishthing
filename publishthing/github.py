@@ -113,7 +113,7 @@ class GithubRepo:
             headers={
                 "Authorization": "token %s" % self.access_token
             },
-            json=json
+            json=rec
         )
         if resp.status_code > 299:
             raise Exception(
@@ -129,7 +129,7 @@ class GithubRepo:
             headers={
                 "Authorization": "token %s" % self.access_token
             },
-            json=json
+            json=rec
         )
         if resp.status_code > 299:
             raise Exception(
