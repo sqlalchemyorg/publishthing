@@ -49,9 +49,22 @@ class GerritApi:
             "changes/%s/comments" % (change, )
         )
 
-    def get_change_current_commit(self, change: str) -> GerritApiResult:
+    def get_change_current_revision(self, change: str) -> GerritApiResult:
         return self._gerrit_api_call(
             "changes/%s?o=CURRENT_REVISION&o=CURRENT_COMMIT" % (change, )
+        )
+
+    def get_change_all_revisions(self, change: str) -> GerritApiResult:
+        return self._gerrit_api_call(
+            "changes/%s?o=ALL_REVISIONS&o=ALL_COMMITS" % (change, )
+        )
+
+    def set_review(
+            self, change: str, revision_id: str,
+            review: GerritJsonRec) -> None:
+        return self._gerrit_api_post(
+            "changes/%s/revisions/%s/review" % (change, revision_id),
+            review
         )
 
     def search(self, **kw: str) -> GerritApiResult:
@@ -77,6 +90,23 @@ class GerritApi:
         # some kind of CSRF thing they do.
         body = resp.text.lstrip(")]}'")
 
+        return json.loads(body)
+
+    def _gerrit_api_post(self, path: str, rec: GerritJsonRec) -> Any:
+        url = "%s/a/%s" % (self.service_url, path)
+
+        resp = requests.post(
+            url,
+            auth=(self.api_username, self.api_password),
+            json=rec
+        )
+        if resp.status_code > 299:
+            raise Exception(
+                "Got response %s for %s: %s" %
+                (resp.status_code, url, resp.content))
+
+        # some kind of CSRF thing they do.
+        body = resp.text.lstrip(")]}'")
         return json.loads(body)
 
 

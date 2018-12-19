@@ -1,11 +1,9 @@
 
 from typing import Any
-import re
 
 from ... import gerrit
 from ... import publishthing
 from . import util
-
 
 def gerrit_hook(thing: publishthing.PublishThing) -> None:
 
@@ -123,10 +121,15 @@ def gerrit_hook(thing: publishthing.PublishThing) -> None:
         """mirror comments posted to the gerrit review to the github PR."""
         hook_user = opts.author_username
 
-        # skip if this is a bot comment
+        # skip if this is a bot comment, as that would produce
+        # endless loops
         if hook_user in set(
             thing.opts.get('ignore_comment_usernames', [])
         ).union([thing.opts['gerrit_api_username']]):
+            thing.debug(
+                "prtogerrit",
+                "Gerrit user %s is in the ignore list, "
+                "not mirroring comment", hook_user)
             return
 
         # locate a pull request linked in the gerrit
@@ -159,7 +162,7 @@ def gerrit_hook(thing: publishthing.PublishThing) -> None:
 
         # index the comments on the PR
         gh_repo = thing.github_repo(opts.project)
-        pullreq = util.GithubPullRequestComments(
+        pullreq = util.GithubPullRequest(
             gh_repo, pull_request_match.number)
 
         outgoing_inline_comments = []
@@ -170,13 +173,13 @@ def gerrit_hook(thing: publishthing.PublishThing) -> None:
             path = gerrit_file_comment['path']
             line_number = gerrit_file_comment["line"]
             is_parent = (gerrit_file_comment.get('side', None) == 'PARENT')
-            github_line = pullreq.convert_gerrit_line_number(
-                path, line_number, is_parent)
+            github_position = pullreq.convert_gerrit_line_number(
+                util.GerritReviewLine(path, line_number, is_parent))
 
-            if github_line is not None:
+            if github_position is not None:
                 if gerrit_file_comment.get('in_reply_to', None):
                     github_parent_comment = pullreq.get_lead_review_comment(
-                        path, github_line)
+                        github_position)  # MARKMARK
 
                     if github_parent_comment:
                         outgoing_inline_replies.append({
@@ -191,7 +194,7 @@ def gerrit_hook(thing: publishthing.PublishThing) -> None:
 
                 outgoing_inline_comments.append({
                     "path": path,
-                    "position": github_line,
+                    "position": github_position.position,
                     "body": util.format_gerrit_comment_for_github(
                         gerrit_file_comment["author"]["name"],
                         gerrit_file_comment["author"]["username"],

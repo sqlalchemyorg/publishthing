@@ -113,7 +113,7 @@ class GithubRepo:
             headers={
                 "Authorization": "token %s" % self.access_token
             },
-            data=json.dumps(rec).encode('utf-8')
+            json=json
         )
         if resp.status_code > 299:
             raise Exception(
@@ -129,7 +129,7 @@ class GithubRepo:
             headers={
                 "Authorization": "token %s" % self.access_token
             },
-            data=json.dumps(rec).encode('utf-8')
+            json=json
         )
         if resp.status_code > 299:
             raise Exception(
@@ -168,6 +168,17 @@ class GithubRepo:
             "https://api.github.com/repos/%s/pulls/%s/comments"
             "?direction=asc&per_page=100" % (
                 self.repo, issue_number
+            )
+        )
+        return self._yield_with_links(url)
+
+    def get_review_comments(self, issue_number: str, review_id: int) -> \
+            Iterator[GithubJsonRec]:
+
+        url = (
+            "https://api.github.com/repos/%s/pulls/%s/reviews/%s/comments"
+            "?direction=asc&per_page=100" % (
+                self.repo, issue_number, review_id
             )
         )
         return self._yield_with_links(url)

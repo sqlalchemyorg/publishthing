@@ -1,41 +1,49 @@
-from typing import NamedTuple
+import collections
 import re
 from typing import Callable
-from typing import Optional
 from typing import Dict
-from typing import Tuple
 from typing import Iterable
 from typing import Iterator
 from typing import List
+from typing import NamedTuple
+from typing import Optional
+from typing import Tuple
+from typing import Union
+
 import unidiff
-import collections
 
 from ... import gerrit
 from ... import github
 from ... import publishthing
+from ...util import memoized_property
 
 class PullRequestRec(NamedTuple):
     number: str
     sha: str
 
+class GerritReviewLine(NamedTuple):
+    path: str
+    line_number: int
+    is_parent: bool
+
+class GithubReviewPosition(NamedTuple):
+    path: str
+    position: int
+
+
 
 def get_pullreq_for_gerrit_change(
         thing: publishthing.PublishThing,
         opts: gerrit.GerritHookEvent) -> Optional[PullRequestRec]:
-    change_commit = thing.gerrit_api.get_change_current_commit(opts.change)
+    change_commit = thing.gerrit_api.get_change_current_revision(opts.change)
 
     current_revision = change_commit["current_revision"]
     message = change_commit["revisions"][
         current_revision]["commit"]["message"]
 
-    search_url = (
-        r"Pull-request: https://github.com/%s/pull/(\d+)\n"
-        "Pull-request-sha: (.+?)\n" % (
-            opts.project,
-        )
+    pr_num_match = get_pullreq_for_gerrit_commit_message(
+        opts.project, message
     )
-
-    pr_num_match = re.search(search_url, message, re.M)
     if pr_num_match is None:
         thing.debug(
             "prtogerrit",
@@ -47,11 +55,24 @@ def get_pullreq_for_gerrit_change(
     thing.debug(
         "prtogerrit",
         "Located pull request %s sha %s in gerrit review %s",
-        pr_num_match.group(1),
-        pr_num_match.group(2),
+        pr_num_match.number,
+        pr_num_match.sha,
         opts.change
     )
-    return PullRequestRec(pr_num_match.group(1), pr_num_match.group(2))
+    return pr_num_match
+
+def get_pullreq_for_gerrit_commit_message(
+        project: str, commit_message: str) -> Optional[PullRequestRec]:
+    search_url = (
+        r"Pull-request: https://github.com/%s/pull/(\d+)\n"
+        "Pull-request-sha: (.+?)\n" % (project,)
+    )
+
+    pr_num_match = re.search(search_url, commit_message, re.M)
+    if pr_num_match is not None:
+        return PullRequestRec(pr_num_match.group(1), pr_num_match.group(2))
+    else:
+        return None
 
 
 def gerrit_comment_includes_verify(opts: gerrit.GerritHookEvent) -> bool:
@@ -63,8 +84,15 @@ def gerrit_comment_includes_verify(opts: gerrit.GerritHookEvent) -> bool:
 
 
 def github_pr_is_opened(event: github.GithubEvent) -> bool:
-    return event.json_data['action'] in (
-        "opened", "edited", "synchronize", "reopened")
+    return bool(event.json_data['action'] in (
+        "opened", "edited", "synchronize", "reopened"))
+
+
+def github_pr_review_is_submitted(event: github.GithubEvent) -> bool:
+    return bool(event.json_data['action'] == "submitted")
+
+def github_pr_comment_is_created(event: github.GithubEvent) -> bool:
+    return bool(event.json_data['action'] == "created")
 
 
 def github_pr_is_reviewer_request(
@@ -93,6 +121,13 @@ def format_gerrit_comment_for_github(
 
     return "**%s** (%s) wrote:\n\n%s" % (
         author_fullname, author_username, message
+    )
+
+def format_github_comment_for_gerrit(
+        author_username: str, message: str) -> str:
+
+    return "%s@github wrote:\n\n%s" % (
+        author_username, message
     )
 
 
@@ -153,36 +188,99 @@ class GerritComments:
         return self._gerrit_comments_by_id.get(id)
 
 
-class GithubPullRequestComments:
-    def __init__(self, gh_repo: github.GithubRepo, issue_num: str) -> None:
+class GithubPullRequest:
+    def __init__(
+            self, gh_repo: github.GithubRepo, issue_num: str,
+            existing_pullreq: Optional[github.GithubJsonRec]=None) -> None:
+        self.gh_repo = gh_repo
         self.number = issue_num
-        self._pullreq = gh_repo.get_pull_request(issue_num)
+        if existing_pullreq is not None:
+            self._pullreq = existing_pullreq
 
-        comments = gh_repo.get_pull_request_comments(issue_num)
-        self._comment_index : Dict[
-                Tuple[str, int], List[github.GithubJsonRec]] = \
+    @memoized_property
+    def _pullreq(self) -> github.GithubJsonRec:
+        return self.gh_repo.get_pull_request(self.number)
+
+
+    def convert_gerrit_line_number(
+            self, line: GerritReviewLine) -> Optional[GithubReviewPosition]:
+        return self._gerrit_line_index.get(line)
+
+    def convert_github_line_position(
+            self, position: GithubReviewPosition) -> \
+            Optional[GerritReviewLine]:
+        return self._gerrit_line_index.get(position)
+
+    _PositionMapType = Dict[
+        Union[GithubReviewPosition, GerritReviewLine],
+        Union[GithubReviewPosition, GerritReviewLine]
+    ]
+
+    @memoized_property
+    def _gerrit_line_index(self) -> _PositionMapType:
+        return self._create_github_position_map(
+            self.gh_repo.get_pull_request_diff(self.number)
+        )
+
+    def _create_github_position_map(
+            self, unified_diff_text: str) -> _PositionMapType:
+        line_index: GithubPullRequest._PositionMapType = {}
+        for patch in unidiff.PatchSet(unified_diff_text):
+            # github measures position relative to @@ per file,
+            # so create an offset for this file
+            line_offset = patch[0][0].diff_line_no - 1
+            for hunk in patch:
+                for line in hunk:
+                    # github position =
+                    # path, position in diff file for that path
+
+                    # gerrit position =
+                    # path, position in file, parent or current revision side
+
+                    github_position = GithubReviewPosition(
+                        patch.path, line.diff_line_no - line_offset)
+
+                    if line.source_line_no is not None:
+                        gerrit_source_line = GerritReviewLine(
+                            patch.path, line.source_line_no, True)
+                        line_index[gerrit_source_line] = github_position
+
+
+                    if line.target_line_no is not None:
+                        gerrit_target_line = GerritReviewLine(
+                            patch.path, line.target_line_no, False)
+
+                        line_index[github_position] = gerrit_target_line
+
+                        line_index[gerrit_target_line] = github_position
+                    elif line.source_line_no is not None:
+                        line_index[github_position] = gerrit_source_line
+
+        return line_index
+
+    @memoized_property
+    def _comment_index(self) -> Dict[
+                GithubReviewPosition, List[github.GithubJsonRec]]:
+
+        comments = self.gh_repo.get_pull_request_comments(self.number)
+        _comment_index : Dict[
+                GithubReviewPosition, List[github.GithubJsonRec]] = \
             collections.defaultdict(list)
 
         for comment in comments:
-            self._comment_index[
-                (comment['path'], comment['position'])].append(comment)
+            _comment_index[
+                GithubReviewPosition(comment['path'], comment['position'])
+            ].append(comment)
 
-        self._gerrit_line_index = self._create_github_position_map(
-            gh_repo.get_pull_request_diff(issue_num)
-        )
+        return _comment_index
 
     def get_head_sha(self) -> str:
-        return self._pullreq['head']['sha']
+        return str(self._pullreq['head']['sha'])
 
-    def convert_gerrit_line_number(
-            self, path: str, line_number: int,
-            is_parent: bool) -> Optional[int]:
-        return self._gerrit_line_index.get((path, line_number, is_parent))
-
-    def get_lead_review_comment(self, path: str, line_number: int) -> \
+    def get_lead_review_comment(self, position: GithubReviewPosition) -> \
         Optional[github.GithubJsonRec]:
 
-        comments = self._comment_index.get((path, line_number), [])
+        comments = self._comment_index.get(position, [])
         for c in comments:
             # for now, return the first comment in the list of comments
             # that has no reply-to, have the reply be to that.
@@ -193,22 +291,4 @@ class GithubPullRequestComments:
         else:
             return None
 
-    def _create_github_position_map(
-            self, unified_diff_text: str) -> Dict[Tuple[str, int, bool], int]:
-        line_index = {}
-        for patch in unidiff.PatchSet(unified_diff_text):
-            # github measures position relative to @@ per file,
-            # so create an offset for this file
-            line_offset = patch[0][0].diff_line_no - 1
-            for hunk in patch:
-                for line in hunk:
-                    if line.source_line_no is not None:
-                        line_index[
-                            (patch.path, line.source_line_no, True)
-                        ] = line.diff_line_no - line_offset
-                    if line.target_line_no is not None:
-                        line_index[
-                            (patch.path, line.target_line_no, False)
-                        ] = line.diff_line_no - line_offset
-        return line_index
 
