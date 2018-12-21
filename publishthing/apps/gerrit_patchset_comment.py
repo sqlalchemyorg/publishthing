@@ -10,7 +10,7 @@ Build a configuration .py as follows::
     mapping = dict(
         fixes_re=r"[Ff]ixes:? +#(\d+)",
         fixes_message="**%(author)s** has proposed a fix for this "
-        "issue:\n\n**%(summary)s** %(gerritlink)s",
+        "issue in the **%(branch)s** branch:\n\n**%(summary)s** %(gerritlink)s",
         references_re=r"[Rr]eferences:? +#(\d+)",
         references_message="**%(author)s** referenced this "
         "issue:\n\n**%(summary)s** %(gerritlink)s",
@@ -104,7 +104,8 @@ def gerrit_patchset_comment(
                 "user": opts.uploader_username,
                 "author": author,
                 "gerritlink": opts.change_url,
-                "summary": summary
+                "summary": summary,
+                "branch": opts.branch
             }
             github_repo.publish_issue_comment(issue_number, complete_message)
 
