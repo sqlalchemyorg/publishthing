@@ -21,16 +21,19 @@ WsgiStartResponse = Callable[[int, WsgiHeaders, ExcInfo], WsgiResponse]
 
 
 class WsgiRequest:
-    def __init__(self, thing: "publishthing.PublishThing",
-                 environ: WsgiEnviron,
-                 start_response: WsgiStartResponse) -> None:
+    def __init__(
+        self,
+        thing: "publishthing.PublishThing",
+        environ: WsgiEnviron,
+        start_response: WsgiStartResponse,
+    ) -> None:
         self.thing = thing
         self.environ = environ
         self.start_response = start_response
         self.request = Request(environ)
         self.response = Response()
-        self.response.content_type = 'text/plain'
-        self._text : List[str] = []
+        self.response.content_type = "text/plain"
+        self._text: List[str] = []
 
     @property
     def body(self) -> bytes:
@@ -42,8 +45,8 @@ class WsgiRequest:
         self._text.append(message)
 
     def respond(
-        self, status_code: Optional[int] = None,
-            message: Optional[str] = None) -> WsgiResponse:
+        self, status_code: Optional[int] = None, message: Optional[str] = None
+    ) -> WsgiResponse:
 
         if status_code:
             self.response.status_code = status_code
@@ -63,5 +66,3 @@ class WsgiRequest:
     @property
     def headers(self) -> WsgiHeaders:
         return self.request.headers
-
-

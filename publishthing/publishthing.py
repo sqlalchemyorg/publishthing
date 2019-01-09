@@ -1,15 +1,12 @@
 import logging
 from typing import Any
-from typing import Callable
-from typing import Optional
 
 from . import gerrit
-from . import git
 from . import github
 from . import publish
 from . import shell
-from .util import memoized_property
 from . import wsgi
+from .util import memoized_property
 
 logging.basicConfig()
 logging.getLogger().setLevel(logging.DEBUG)
@@ -32,8 +29,10 @@ class PublishThing:
         return gerrit.GerritApi(self)
 
     def wsgi_request(
-            self, environ: "wsgi.WsgiEnviron",
-            start_response: "wsgi.WsgiStartResponse") -> "wsgi.WsgiRequest":
+        self,
+        environ: "wsgi.WsgiEnviron",
+        start_response: "wsgi.WsgiStartResponse",
+    ) -> "wsgi.WsgiRequest":
         return wsgi.WsgiRequest(self, environ, start_response)
 
     def github_repo(self, repo: str) -> "github.GithubRepo":
@@ -56,7 +55,5 @@ class PublishThing:
     def cmd_error(self, message: str) -> None:
         raise Exception(message)
 
-    def shell_in(self, path: str, create: bool=False) -> "shell.Shell":
+    def shell_in(self, path: str, create: bool = False) -> "shell.Shell":
         return shell.Shell(self, path, create)
-
-

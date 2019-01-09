@@ -1,11 +1,11 @@
 import os
 from typing import Optional
 
+from . import gerrit
 from . import publishthing  # noqa
 from . import shell as _shell  # noqa
-
-from . import gerrit
 from . import util
+
 
 class GitError(Exception):
     pass
@@ -15,11 +15,14 @@ class GitRepo:
     was_created = False
 
     def __init__(
-            self, thing: "publishthing.PublishThing",
-            shell: "_shell.Shell",
-            local_name: str,
-            origin: Optional[str] = None,
-            bare: bool = False, create: bool = False) -> None:
+        self,
+        thing: "publishthing.PublishThing",
+        shell: "_shell.Shell",
+        local_name: str,
+        origin: Optional[str] = None,
+        bare: bool = False,
+        create: bool = False,
+    ) -> None:
         self.thing = thing
         self.origin = origin
         self.shell = shell
@@ -34,13 +37,14 @@ class GitRepo:
                 raise GitError("No git repository at %s" % self.shell.path)
 
     def checkout(
-            self, branchname: str, detached: Optional[bool] = False) -> None:
+        self, branchname: str, detached: Optional[bool] = False
+    ) -> None:
         with self.checkout_shell() as shell:
             shell.call_shell_cmd("git", "checkout", branchname)
             if not detached:
                 shell.call_shell_cmd("git", "pull", "origin", branchname)
 
-    def fetch(self, all: bool=False) -> None:
+    def fetch(self, all: bool = False) -> None:
         with self.cmd_shell() as shell:
             cmd = ["git", "fetch"]
             if all:
@@ -48,11 +52,12 @@ class GitRepo:
 
             shell.call_shell_cmd(*cmd)
 
-    def create_branch(self, branchname: str, force: bool=False) -> None:
+    def create_branch(self, branchname: str, force: bool = False) -> None:
         self._assert_not_bare()
         with self.shell.shell_in(self.local_name) as shell:
             shell.call_shell_cmd(
-                "git", "checkout", "-B" if force else "-b", branchname)
+                "git", "checkout", "-B" if force else "-b", branchname
+            )
 
     @property
     def checkout_location(self) -> str:
@@ -67,17 +72,26 @@ class GitRepo:
         return self.shell.shell_in(self.local_name)
 
     def enable_gerrit(
-        self, git_identity: str, git_email: str, git_remote_username: str,
-            git_remote_password: str) -> None:
+        self,
+        git_identity: str,
+        git_email: str,
+        git_remote_username: str,
+        git_remote_password: str,
+    ) -> None:
         self.gerrit = gerrit.GerritGit(
-            self, git_identity, git_email,
-            git_remote_username, git_remote_password)
+            self,
+            git_identity,
+            git_email,
+            git_remote_username,
+            git_remote_password,
+        )
 
     def _assert_not_bare(self) -> None:
         if self.bare:
             raise GitError(
                 "Checkout %s is a bare repository, pulls and "
-                "file operations cannot be performed" % self._git_bare_path)
+                "file operations cannot be performed" % self._git_bare_path
+            )
 
     @util.memoized_property
     def _git_bare_path(self) -> str:
@@ -90,8 +104,9 @@ class GitRepo:
         for dirname in "refs", "objects":
             if not os.path.isdir(os.path.join(path, dirname)):
                 raise GitError(
-                    "Git %s repostory path %s does not have a %s directory" %
-                    ("bare" if self.bare else "full", path, dirname))
+                    "Git %s repostory path %s does not have a %s directory"
+                    % ("bare" if self.bare else "full", path, dirname)
+                )
 
     def _ensure(self) -> bool:
         if not os.path.exists(self._git_bare_path):
@@ -104,7 +119,8 @@ class GitRepo:
         if not os.path.exists(self.checkout_location):
             if not os.path.exists(self.shell.path):
                 raise GitError(
-                    "working directory '%s' does not exist" % self.shell.path)
+                    "working directory '%s' does not exist" % self.shell.path
+                )
             if self.origin is None:
                 raise GitError("no origin is defined")
             args = ["git", "clone", self.origin, self.local_name]
@@ -115,9 +131,11 @@ class GitRepo:
     def set_identity(self, git_identity: str, git_email: str) -> None:
         with self.cmd_shell() as shell:
             shell.call_shell_cmd(
-                "git", "config", "--local", "user.name", git_identity)
+                "git", "config", "--local", "user.name", git_identity
+            )
             shell.call_shell_cmd(
-                "git", "config", "--local", "user.email", git_email)
+                "git", "config", "--local", "user.email", git_email
+            )
 
     def remote_add(self, remote: str, url: str) -> None:
         with self.cmd_shell() as shell:
@@ -140,8 +158,12 @@ class GitRepo:
         with self.cmd_shell() as shell:
             shell.call_shell_cmd(*args)
 
-    def pull(self, repository: str, branch: Optional[str] = None,
-             squash: bool = False) -> None:
+    def pull(
+        self,
+        repository: str,
+        branch: Optional[str] = None,
+        squash: bool = False,
+    ) -> None:
         args = ["git", "pull", repository]
         if branch:
             args += [branch]
@@ -150,7 +172,7 @@ class GitRepo:
         with self.cmd_shell() as shell:
             shell.call_shell_cmd(*args)
 
-    def reset(self, hard: bool=False) -> None:
+    def reset(self, hard: bool = False) -> None:
         args = ["git", "reset"]
         if hard:
             args += ["--hard"]
@@ -168,8 +190,8 @@ class GitRepo:
                     raise Exception("could not determine author for PR.")
 
     def commit(
-            self, comment: str, author: Optional[str] = None,
-            amend: bool = False) -> None:
+        self, comment: str, author: Optional[str] = None, amend: bool = False
+    ) -> None:
         self._assert_not_bare()
         args = ["git", "commit", "-m", comment]
         if author:
@@ -178,4 +200,3 @@ class GitRepo:
             args += ["--amend"]
         with self.checkout_shell() as shell:
             shell.call_shell_cmd(*args)
-

@@ -47,16 +47,17 @@ from .. import github
 from .. import publishthing
 from .. import wsgi
 
-def mirror_repos(
-        thing: publishthing.PublishThing,
-        mapping: Dict[str, Dict[str, Any]]) -> None:
 
+def mirror_repos(
+    thing: publishthing.PublishThing, mapping: Dict[str, Dict[str, Any]]
+) -> None:
     @thing.github_webhook.event("push")  # type: ignore
     def receive_push(
-            event: github.GithubEvent, request: wsgi.WsgiRequest) -> None:
+        event: github.GithubEvent, request: wsgi.WsgiRequest
+    ) -> None:
 
-        repository_message = event.json_data['repository']
-        repo = repository_message['full_name']
+        repository_message = event.json_data["repository"]
+        repo = repository_message["full_name"]
 
         repo = repo.strip("/")
 
@@ -64,17 +65,16 @@ def mirror_repos(
         if repo in mapping:
             entry = mapping[repo]
 
-            path = os.path.dirname(entry['local_repo'])
-            local_name = os.path.basename(entry['local_repo'])
+            path = os.path.dirname(entry["local_repo"])
+            local_name = os.path.basename(entry["local_repo"])
 
             with thing.shell_in(path) as shell:
                 git = shell.git_repo(local_name, bare=True)
 
-                git.update_remote(entry['remote'])
+                git.update_remote(entry["remote"])
                 request.add_text("repository: %s", repo)
                 request.add_text("updated remote %s", entry["remote"])
-                if 'push_to' in entry:
-                    for remote in entry['push_to']:
+                if "push_to" in entry:
+                    for remote in entry["push_to"]:
                         git.push(remote, mirror=True)
                         request.add_text("pushed remote %s", remote)
-

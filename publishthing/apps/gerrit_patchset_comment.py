@@ -52,9 +52,10 @@ from typing import Tuple
 
 from .. import publishthing
 
+
 def gerrit_patchset_comment(
-        thing: publishthing.PublishThing,
-        mapping: Dict[str, str]) -> None:
+    thing: publishthing.PublishThing, mapping: Dict[str, str]
+) -> None:
 
     regs = {}
     for key in mapping:
@@ -63,36 +64,35 @@ def gerrit_patchset_comment(
             reg = mapping[key]
             message = mapping["%s_message" % key[0:-3]]
 
-            regs[key[0:-3]] = {
-                "reg": reg,
-                "comment": message
-            }
+            regs[key[0:-3]] = {"reg": reg, "comment": message}
 
-    @thing.gerrit_hook.event("patchset-created")   # type: ignore
+    @thing.gerrit_hook.event("patchset-created")  # type: ignore
     def patchset_created(opts: Any) -> None:
         this_revision = thing.gerrit_api.get_patchset_commit(
-            opts.change, opts.patchset)
+            opts.change, opts.patchset
+        )
 
-        author = this_revision['author']['name']
-        summary = this_revision['message'].split("\n")[0]
+        author = this_revision["author"]["name"]
+        summary = this_revision["message"].split("\n")[0]
 
         if opts.patchset > 1:
             # look for lines that were added in this patchset
             # compared to the previous one.
             previous_revision = thing.gerrit_api.get_patchset_commit(
-                opts.change, opts.patchset - 1)
+                opts.change, opts.patchset - 1
+            )
             lines = list(
                 difflib.unified_diff(
-                    previous_revision['message'].split("\n"),
-                    this_revision['message'].split("\n"))
+                    previous_revision["message"].split("\n"),
+                    this_revision["message"].split("\n"),
+                )
             )
             issue_numbers = _grep_issue_numbers(
-                regs,
-                [l[1:] for l in lines if l.startswith('+')]
+                regs, [l[1:] for l in lines if l.startswith("+")]
             )
         else:
             # this is the first patchset, all lines are new
-            lines = this_revision['message'].split("\n")
+            lines = this_revision["message"].split("\n")
             issue_numbers = _grep_issue_numbers(regs, lines)
 
         # e.g. gerrit sqlalchemy/testgerrit is also github
@@ -105,22 +105,22 @@ def gerrit_patchset_comment(
                 "author": author,
                 "gerritlink": opts.change_url,
                 "summary": summary,
-                "branch": opts.branch
+                "branch": opts.branch,
             }
             github_repo.publish_issue_comment(issue_number, complete_message)
 
 
 def _grep_issue_numbers(
-        regs: Dict[str, Dict[str, str]],
-        lines: List[str]) -> List[Tuple[str, str]]:
+    regs: Dict[str, Dict[str, str]], lines: List[str]
+) -> List[Tuple[str, str]]:
     outputs: Dict[str, Set[str]] = collections.defaultdict(set)
     for line in lines:
         for key, value in regs.items():
-            match = re.match(value['reg'], line)
+            match = re.match(value["reg"], line)
             if match:
                 outputs[key].add(match.group(1))
     return [
         (regs[key]["comment"], value)
-        for key in outputs for value in outputs[key]
+        for key in outputs
+        for value in outputs[key]
     ]
-

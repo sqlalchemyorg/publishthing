@@ -1,14 +1,12 @@
+import argparse
 import multiprocessing
 import multiprocessing.pool
 import os
-from typing import Any
 from typing import Callable
 from typing import Iterator
 from typing import List
 from typing import Optional
 from typing import Tuple
-
-import argparse
 
 from .. import github
 from .. import publishthing
@@ -17,11 +15,12 @@ WORKERS = 10
 
 JobList = List["multiprocessing.pool.AsyncResult[None]"]
 
+
 def run_jobs(
-        iterator: Iterator[github.GithubJsonRec],
-        jobs: JobList,
-        completed_callback: Callable[[int, bool], None]
-    ) -> Iterator[github.GithubJsonRec]:
+    iterator: Iterator[github.GithubJsonRec],
+    jobs: JobList,
+    completed_callback: Callable[[int, bool], None],
+) -> Iterator[github.GithubJsonRec]:
     idx = 0
     for idx, item in enumerate(iterator):
         yield item
@@ -53,41 +52,47 @@ def run_sync(gh: github.GithubRepo, destination: str) -> None:
                 if url != gh.url:
                     gh.thing.cmd_error(
                         "Persisted url %s does not match the "
-                        "URL we're getting right now: %s, exiting" % (
-                            url, gh.url
-                        ))
+                        "URL we're getting right now: %s, exiting"
+                        % (url, gh.url)
+                    )
 
         highest_timestamp = None
 
         pool = multiprocessing.Pool(WORKERS)
 
-        jobs : JobList = []
+        jobs: JobList = []
 
         def completed_callback(name: str) -> Callable[[int, bool], None]:
             def do_completed(idx: int, is_done: bool) -> None:
                 gh.thing.message(
                     "Completed %s %s, most recent updated at: %s",
-                    idx, name, highest_timestamp)
+                    idx,
+                    name,
+                    highest_timestamp,
+                )
                 workdir.write_file(
                     last_received_filename,
-                    "%s\n%s" % (gh.url, highest_timestamp)
+                    "%s\n%s" % (gh.url, highest_timestamp),
                 )
+
             return do_completed
 
         for issue in run_jobs(
-            gh.get_issues_since(last_received), jobs,
-            completed_callback("issues")
+            gh.get_issues_since(last_received),
+            jobs,
+            completed_callback("issues"),
         ):
-            if highest_timestamp is None or \
-                    issue["updated_at"] > highest_timestamp:
+            if (
+                highest_timestamp is None
+                or issue["updated_at"] > highest_timestamp
+            ):
                 highest_timestamp = issue["updated_at"]
 
             issue_dest = os.path.join(
-                "./issues",
-                str(issue["number"] // 100), str(issue["number"])
+                "./issues", str(issue["number"] // 100), str(issue["number"])
             )
 
-            attachments : List[Tuple[str, str]] = []
+            attachments: List[Tuple[str, str]] = []
 
             attachments.extend(gh.find_attachments(issue))
 
@@ -95,8 +100,7 @@ def run_sync(gh: github.GithubRepo, destination: str) -> None:
             with workdir.shell_in(issue_dest, create=True) as sub:
                 jobs.append(
                     pool.apply_async(
-                        _fetch_attachments,
-                        (gh, sub.path, attachments, )
+                        _fetch_attachments, (gh, sub.path, attachments)
                     )
                 )
 
@@ -105,16 +109,18 @@ def run_sync(gh: github.GithubRepo, destination: str) -> None:
                 sub.write_json_file("issue.json", issue)
 
         for comment in run_jobs(
-            gh.get_comments_since(last_received), jobs,
-            completed_callback("comments")
+            gh.get_comments_since(last_received),
+            jobs,
+            completed_callback("comments"),
         ):
-            if highest_timestamp is None or \
-                    comment["updated_at"] > highest_timestamp:
+            if (
+                highest_timestamp is None
+                or comment["updated_at"] > highest_timestamp
+            ):
                 highest_timestamp = comment["updated_at"]
 
             issue_dest = os.path.join(
-                "./issues",
-                str(issue["number"] // 100), str(issue["number"])
+                "./issues", str(issue["number"] // 100), str(issue["number"])
             )
 
             with workdir.shell_in(issue_dest, create=True) as sub:
@@ -124,23 +130,24 @@ def run_sync(gh: github.GithubRepo, destination: str) -> None:
 
                 jobs.append(
                     pool.apply_async(
-                        _fetch_attachments,
-                        (gh, sub.path, attachments, )
+                        _fetch_attachments, (gh, sub.path, attachments)
                     )
                 )
 
                 sub.write_json_file(
-                    "comment_%s_%s.json" % (
-                        comment['created_at'],
-                        comment['id']
-                    ), comment)
+                    "comment_%s_%s.json"
+                    % (comment["created_at"], comment["id"]),
+                    comment,
+                )
 
 
 def _fetch_attachments(
-        gh: github.GithubRepo, path: str, attachments: List[str]) -> None:
+    gh: github.GithubRepo, path: str, attachments: List[str]
+) -> None:
     for filename, url in attachments:
         with gh.thing.shell_in(path).shell_in(
-                "attachments", create=True) as sub:
+            "attachments", create=True
+        ) as sub:
             content = gh.get_attachment(url)
             sub.write_file(filename, content, binary=True)
 
@@ -148,16 +155,15 @@ def _fetch_attachments(
 def main(argv: Optional[List[str]] = None) -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "repo", type=str, help="user/reponame string on github")
+        "repo", type=str, help="user/reponame string on github"
+    )
     parser.add_argument("dest", type=str, help="directory in which to sync")
-    parser.add_argument(
-        "--access-token", type=str, help="oauth access token")
+    parser.add_argument("--access-token", type=str, help="oauth access token")
 
     opts = parser.parse_args(argv)
     thing = publishthing.PublishThing(
-        github_access_token=opts.access_token,
-        github_api_concurrency=WORKERS)
+        github_access_token=opts.access_token, github_api_concurrency=WORKERS
+    )
     gh = thing.github_repo(opts.repo)
 
     run_sync(gh, opts.dest)
-
