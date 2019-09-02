@@ -25,6 +25,7 @@ setup(
         "console_scripts": [
             "publishthing = publishthing.apps.generate_site:main",
             "sync_github_issues = publishthing.apps.sync_gh_issues:main",
+            "publish_gh_relnotes = publishthing.apps.publish_gh_relnotes:main",
         ]
     },
 )

@@ -9,7 +9,7 @@ from . import wsgi
 from .util import memoized_property
 
 logging.basicConfig()
-logging.getLogger().setLevel(logging.DEBUG)
+logging.getLogger("publishthing").setLevel(logging.DEBUG)
 
 
 class PublishThing:

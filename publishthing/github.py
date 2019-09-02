@@ -91,7 +91,10 @@ class GithubRepo:
         self._last_push_time = time.time()
 
     def _api_get(
-        self, url: str, headers: Optional[Dict[str, str]] = None
+        self,
+        url: str,
+        headers: Optional[Dict[str, str]] = None,
+        return_none_for_404=False,
     ) -> requests.Response:
         self._wait_for_api()
         _headers = {"Authorization": "token %s" % self.access_token}
@@ -99,6 +102,9 @@ class GithubRepo:
             _headers.update(headers)
         resp = self.session.get(url, headers=_headers)
         if resp.status_code != 200:
+            if return_none_for_404 and resp.status_code == 404:
+                return None
+
             raise Exception(
                 "Got response %s for %s: %s"
                 % (resp.status_code, url, resp.content)
@@ -135,6 +141,36 @@ class GithubRepo:
             )
 
         return resp
+
+    def get_git_tags(self) -> Iterator[GithubJsonRec]:
+        url = (
+            "https://api.github.com/repos/%s/git/refs/tags"
+            "?direction=asc&per_page=100" % (self.repo,)
+        )
+        return self._yield_with_links(url)
+
+    def get_release_by_tag(self, tagname: str) -> GithubJsonRec:
+        url = "https://api.github.com/repos/%s/releases/tags/%s" % (
+            self.repo,
+            tagname,
+        )
+
+        resp = self._api_get(url, return_none_for_404=True)
+        if resp is None:
+            return None
+        else:
+            return resp.json()
+
+    def edit_release(self, release_id: str, release: GithubJsonRec) -> None:
+        url = "https://api.github.com/repos/%s/releases/%s" % (
+            self.repo,
+            release_id,
+        )
+        self._api_patch(url, rec=release)
+
+    def create_release(self, release: GithubJsonRec) -> None:
+        url = "https://api.github.com/repos/%s/releases" % (self.repo,)
+        self._api_post(url, rec=release)
 
     def create_pr_review(
         self,
