@@ -1,4 +1,4 @@
-"""Post comments to a github issue when it is referenced in a patchset commit.
+r"""Post comments to a github issue when it is referenced in a patchset commit.
 
 Build a configuration .py as follows::
 
@@ -10,7 +10,7 @@ Build a configuration .py as follows::
     mapping = dict(
         fixes_re=r"[Ff]ixes:? +#(\d+)",
         fixes_message="**%(author)s** has proposed a fix for this "
-        "issue in the **%(branch)s** branch:\n\n**%(summary)s** %(gerritlink)s",
+        "issue in **%(branch)s** branch:\n\n**%(summary)s** %(gerritlink)s",
         references_re=r"[Rr]eferences:? +#(\d+)",
         references_message="**%(author)s** referenced this "
         "issue:\n\n**%(summary)s** %(gerritlink)s",

@@ -4,34 +4,32 @@ to a push.
 
 e.g.::
 
-### myfile.wsgi ###
+    ### myfile.wsgi ###
 
-from publishthing.apps import mirror_repos
-import publishthing
+    from publishthing.apps import mirror_repos
+    import publishthing
 
-thing = publishthing.PublishThing(
-    github_webhook_secret="abcdefg"
-)
+    thing = publishthing.PublishThing(
+        github_webhook_secret="abcdefg"
+    )
 
-mapping = {
-    "sqlalchemy/testgerrit": {
-        "local_repo": "/home/classic/tmp/testgerrit.git",
-        "remote": "origin",
-        "push_to": ['bitbucket', 'zzzeek_github'],
-    },
-}
+    mapping = {
+        "sqlalchemy/testgerrit": {
+            "local_repo": "/home/classic/tmp/testgerrit.git",
+            "remote": "origin",
+            "push_to": ['bitbucket', 'zzzeek_github'],
+        },
+    }
 
-mirror_repos.mirror_repos(thing, mapping)
+    mirror_repos.mirror_repos(thing, mapping)
 
-application = thing.github_webhook
+    application = thing.github_webhook
 
-#####
-
-### then set up a URL to point to the .wsgi file:
+then set up a URL to point to the .wsgi file:
 
 http://mysite.com/mirror_repos
 
-then set up the pull event in Githubthe URL.
+then set up the pull event in Github.
 
 local_repo refers to a place where you've created a clone of the repo
 using ``git clone --mirror``.  The "origin" should be where we get the

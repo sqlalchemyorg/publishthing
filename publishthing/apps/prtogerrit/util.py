@@ -207,8 +207,8 @@ class GerritComments:
 
         return None
 
-    def get_comment_by_id(self, id: str) -> Optional[gerrit.GerritJsonRec]:
-        return self._gerrit_comments_by_id.get(id)
+    def get_comment_by_id(self, id_: str) -> Optional[gerrit.GerritJsonRec]:
+        return self._gerrit_comments_by_id.get(id_)
 
 
 class GithubPullRequest:

@@ -44,7 +44,7 @@ class GitRepo:
             if not detached:
                 shell.call_shell_cmd("git", "pull", "origin", branchname)
 
-    def fetch(self, all: bool = False) -> None:
+    def fetch(self, all_: bool = False) -> None:
         with self.cmd_shell() as shell:
             cmd = ["git", "fetch"]
             if all:

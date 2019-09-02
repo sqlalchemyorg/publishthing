@@ -61,7 +61,7 @@ def github_hook(
 
             target_branch = pr["base"]["ref"]
 
-            git.fetch(all=True)
+            git.fetch(all_=True)
 
             # checkout the base branch as detached, usually master
             git.checkout("origin/%s" % (target_branch,), detached=True)
