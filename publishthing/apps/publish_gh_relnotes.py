@@ -51,7 +51,7 @@ def run_sync(
                 "Can't parse changelog version string: %s" % release
             )
 
-        formatted_release = "v%s" % release
+        formatted_release = "%s" % release
 
         # for the moment we look only at a, b, c, rc which are
         # all prerelease symbols
