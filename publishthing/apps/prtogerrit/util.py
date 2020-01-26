@@ -106,7 +106,7 @@ def github_comment_is_pullrequest(event: github.GithubEvent) -> bool:
 
 
 def github_pr_is_reviewer_request(
-    wait_for_reviewer: str
+    wait_for_reviewer: str,
 ) -> Callable[[github.GithubEvent], bool]:
     def is_reviewer_request(event: github.GithubEvent) -> bool:
         return event.json_data[
@@ -120,7 +120,7 @@ def github_pr_is_reviewer_request(
 
 
 def format_gerrit_comment_for_github(
-    author_fullname: str, author_username: str, message: str
+    change_url: str, author_fullname: str, author_username: str, message: str
 ) -> str:
 
     # strip out email address if present, some events include it
@@ -131,10 +131,11 @@ def format_gerrit_comment_for_github(
 
     message = re.sub(r"^\s*Patch Set \d+:\s*", "", message)
 
-    return "**%s** (%s) wrote:\n\n%s" % (
+    return "**%s** (%s) wrote:\n\n%s\n\nView this in Gerrit at %s" % (
         author_fullname,
         author_username,
         message,
+        change_url,
     )
 
 
@@ -291,7 +292,7 @@ class GithubPullRequest:
 
     @memoized_property
     def _comment_index(
-        self
+        self,
     ) -> Dict[GithubReviewPosition, List[github.GithubJsonRec]]:
 
         comments = self.gh_repo.get_pull_request_comments(self.number)

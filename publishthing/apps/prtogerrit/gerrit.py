@@ -117,7 +117,10 @@ def gerrit_hook(thing: publishthing.PublishThing) -> None:
             gh_repo.publish_issue_comment(
                 pull_request_match.number,
                 util.format_gerrit_comment_for_github(
-                    opts.abandoner, opts.abandoner_username, opts.reason
+                    opts.change_url,
+                    opts.abandoner,
+                    opts.abandoner_username,
+                    opts.reason,
                 ),
             )
             gh_repo.publish_issue_comment(
@@ -133,7 +136,10 @@ def gerrit_hook(thing: publishthing.PublishThing) -> None:
             gh_repo.publish_issue_comment(
                 pull_request_match.number,
                 util.format_gerrit_comment_for_github(
-                    opts.restorer, opts.restorer_username, opts.reason
+                    opts.change_url,
+                    opts.restorer,
+                    opts.restorer_username,
+                    opts.reason,
                 ),
             )
             gh_repo.publish_issue_comment(
@@ -223,6 +229,7 @@ def gerrit_hook(thing: publishthing.PublishThing) -> None:
                             {
                                 "in_reply_to": github_parent_comment["id"],
                                 "body": util.format_gerrit_comment_for_github(
+                                    opts.change_url,
                                     gerrit_file_comment["author"]["name"],
                                     gerrit_file_comment["author"]["username"],
                                     gerrit_file_comment["message"],
@@ -236,6 +243,7 @@ def gerrit_hook(thing: publishthing.PublishThing) -> None:
                         "path": path,
                         "position": github_position.position,
                         "body": util.format_gerrit_comment_for_github(
+                            opts.change_url,
                             gerrit_file_comment["author"]["name"],
                             gerrit_file_comment["author"]["username"],
                             gerrit_file_comment["message"],
@@ -252,6 +260,7 @@ def gerrit_hook(thing: publishthing.PublishThing) -> None:
                 )
 
         github_comment_body = util.format_gerrit_comment_for_github(
+            opts.change_url,
             lead_gerrit_comment["author"]["name"],
             lead_gerrit_comment["author"]["username"],
             lead_gerrit_comment["message"],
