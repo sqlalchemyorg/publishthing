@@ -105,16 +105,43 @@ def github_comment_is_pullrequest(event: github.GithubEvent) -> bool:
     return bool(event.json_data["issue"].get("pull_request"))
 
 
-def github_pr_is_reviewer_request(
-    wait_for_reviewer: str,
+def github_pr_is_authorized_reviewer_request(
+    thing: publishthing.PublishThing, wait_for_reviewer: str
 ) -> Callable[[github.GithubEvent], bool]:
     def is_reviewer_request(event: github.GithubEvent) -> bool:
-        return event.json_data[
+        is_review_request = event.json_data[
             "action"
         ] == "review_requested" and wait_for_reviewer in {
             rec["login"]
             for rec in event.json_data["pull_request"]["requested_reviewers"]
         }
+
+        if not is_review_request:
+            return False
+
+        review_requester = event.json_data["pull_request"]["user"]["login"]
+
+        gh_repo = thing.github_repo(event.repo_name)
+        permission_json = gh_repo.get_user_permission(review_requester)
+        is_authorized = permission_json and permission_json["permission"] in (
+            "admin",
+            "write",
+        )
+
+        if not is_authorized:
+            is_review_request = False
+            owner, project = event.repo_name.split("/")
+
+            gh_repo.create_pr_review(
+                event.json_data["number"],
+                "Hi, this is **%s** and I see you've pinged me for review. "
+                "However, user **%s** is not authorized to initiate CI jobs.  "
+                "Please wait for a project member to do this!"
+                % (wait_for_reviewer, review_requester),
+                event="COMMENT",
+            )
+
+        return is_review_request
 
     return is_reviewer_request
 

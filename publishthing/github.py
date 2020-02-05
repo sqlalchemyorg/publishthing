@@ -142,6 +142,18 @@ class GithubRepo:
 
         return resp
 
+    def get_user_permission(self, username) -> GithubJsonRec:
+        url = "https://api.github.com/repos/%s/collaborators/%s/permission" % (
+            self.repo,
+            username,
+        )
+
+        resp = self._api_get(url, return_none_for_404=True)
+        if resp is None:
+            return None
+        else:
+            return resp.json()
+
     def get_git_tags(self) -> Iterator[GithubJsonRec]:
         url = (
             "https://api.github.com/repos/%s/git/refs/tags"

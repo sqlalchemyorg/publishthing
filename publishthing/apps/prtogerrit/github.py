@@ -34,7 +34,10 @@ def github_hook(
         )
 
     @thing.github_webhook.event(  # type: ignore
-        "pull_request", util.github_pr_is_reviewer_request(wait_for_reviewer)
+        "pull_request",
+        util.github_pr_is_authorized_reviewer_request(
+            thing, wait_for_reviewer
+        ),
     )
     def create_new_gerrit_for_review_request(
         event: github.GithubEvent, request: wsgi.WsgiRequest
@@ -47,9 +50,11 @@ def github_hook(
 
         gh_repo.create_pr_review(
             event.json_data["number"],
-            "OK, this is **%s** setting up my work to try to get revision %s "
+            "OK, this is **%s** setting up my work on behalf of **%s** to "
+            "try to get revision %s "
             "of this pull request into gerrit so we can run tests and "
-            "reviews and stuff" % (wait_for_reviewer, pr["head"]["sha"]),
+            "reviews and stuff"
+            % (wait_for_reviewer, pr["user"]["login"], pr["head"]["sha"]),
             event="COMMENT",
         )
 
