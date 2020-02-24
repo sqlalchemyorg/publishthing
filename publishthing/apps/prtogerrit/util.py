@@ -119,7 +119,7 @@ def github_pr_is_authorized_reviewer_request(
         if not is_review_request:
             return False
 
-        review_requester = event.json_data["pull_request"]["user"]["login"]
+        review_requester = event.json_data["sender"]["login"]
 
         gh_repo = thing.github_repo(event.repo_name)
         permission_json = gh_repo.get_user_permission(review_requester)

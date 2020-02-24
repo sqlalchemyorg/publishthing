@@ -54,7 +54,11 @@ def github_hook(
             "try to get revision %s "
             "of this pull request into gerrit so we can run tests and "
             "reviews and stuff"
-            % (wait_for_reviewer, pr["user"]["login"], pr["head"]["sha"]),
+            % (
+                wait_for_reviewer,
+                event.json_data["sender"]["login"],
+                pr["head"]["sha"],
+            ),
             event="COMMENT",
         )
 
