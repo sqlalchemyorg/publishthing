@@ -178,46 +178,72 @@ class GerritComments:
     gerrit review."""
 
     def __init__(self, gerrit_api: gerrit.GerritApi, change: str) -> None:
-        gerrit_comments = gerrit_api.get_change_standalone_comments(change)[
+
+        # this API call is still the one that gives us text that will
+        # be in what the command line hook sends us, so still using this.
+        gerrit_messages = gerrit_api.get_change_standalone_comments(change)[
             "messages"
         ]
 
-        for gerrit_comment in gerrit_comments:
-            gerrit_comment["line_comments"] = []
-        self._lead_comments = gerrit_comments
-        self._gerrit_comments_by_timestamp = {
-            gerrit_comment["date"]: gerrit_comment
-            for gerrit_comment in gerrit_comments
-        }
-        self._gerrit_comments_by_id = {
-            gerrit_comment["id"]: gerrit_comment
-            for gerrit_comment in gerrit_comments
+        _change_message_id_to_msg = {
+            msg["id"]: msg["message"] for msg in gerrit_messages
         }
 
+        # in gerrit 3.3, we can get all the comment data with this API request;
+        # previously the "non file" comments weren't here (or maybe I just
+        # missed them)
         gerrit_inline_comments = gerrit_api.get_change_inline_comments(change)
 
-        self._gerrit_comments_by_id.update(
-            {
-                gerrit_inline_comment["id"]: gerrit_inline_comment
-                for gerrit_file_comments in gerrit_inline_comments.values()
-                for gerrit_inline_comment in gerrit_file_comments
-            }
+        # We want to organize the comments into:
+        #
+        # patch level comment
+        #       |
+        #       +--> file comment
+        #       +--> file comment
+        # etc.
+
+        gerrit_comments_by_change_message_id = {}
+        for file_, items in gerrit_inline_comments.items():
+            for item in items:
+                change_message_id = item["change_message_id"]
+
+                if change_message_id in gerrit_comments_by_change_message_id:
+                    lead_comment = gerrit_comments_by_change_message_id[
+                        change_message_id
+                    ]
+                else:
+                    lead_comment = gerrit_comments_by_change_message_id[
+                        change_message_id
+                    ] = {
+                        "change_message_id": change_message_id,
+                        "patch_set": item["patch_set"],
+                        "updated": item["updated"],
+                        "commit_id": item["commit_id"],
+                        "line_comments": [],
+                        "author": item["author"],
+                        "command_line_message": _change_message_id_to_msg[
+                            change_message_id
+                        ],
+                    }
+                if "line" in item:
+                    lead_comment["line_comments"].append(item)
+                    item["path"] = file_
+                else:
+                    assert "message" not in lead_comment
+                    lead_comment.update(item)
+
+        self._lead_comments = sorted(
+            gerrit_comments_by_change_message_id.values(),
+            key=lambda item: item["updated"],
         )
-        for path, gerrit_file_comments in gerrit_inline_comments.items():
-            for gerrit_file_comment in gerrit_file_comments:
-                timestamp = gerrit_file_comment["updated"]
-                lead_comment = self._gerrit_comments_by_timestamp[timestamp]
-                lead_comment["line_comments"].append(gerrit_file_comment)
-                gerrit_file_comment["path"] = path
-                gerrit_file_comment["parent_id"] = lead_comment["id"]
 
     def __iter__(self) -> Iterable[gerrit.GerritJsonRec]:
         return iter(self._lead_comments)
 
     def _compare_message(self, message: str, hook_message: str) -> bool:
-        return re.sub(r"\\.|\n|\t", "", message) == re.sub(
-            r"\\.|\n|\t", "", hook_message
-        )
+        return re.sub(
+            r"(?:^Patch Set \d+\:)|\\.|\n|\t", "", message
+        ) == re.sub(r"(?:^Patch Set \d+\:)|\\.|\n|\t", "", hook_message)
 
     def most_recent_comment_matching(
         self, username: str, text: str
@@ -225,18 +251,18 @@ class GerritComments:
         # comments are in ascending timestamp so go in reverse order.
         # it's *easy* to find dupes here because per-line reviews are often
         # left without a main comment body.
+
         for lead_gerrit_comment in reversed(self._lead_comments):
-            if lead_gerrit_comment["author"][
-                "username"
-            ] == username and self._compare_message(
-                lead_gerrit_comment["message"], text
+            if (
+                self._compare_message(
+                    lead_gerrit_comment["command_line_message"], text
+                )
+                or "message" in lead_gerrit_comment
+                and self._compare_message(lead_gerrit_comment["message"], text)
             ):
                 return lead_gerrit_comment
 
         return None
-
-    def get_comment_by_id(self, id_: str) -> Optional[gerrit.GerritJsonRec]:
-        return self._gerrit_comments_by_id.get(id_)
 
 
 class GithubPullRequest:
