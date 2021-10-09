@@ -59,7 +59,7 @@ def main(argv: Optional[List[str]] = None) -> None:
     work_dir: str = os.path.join(os.path.dirname(repo_path), "work")
     with thing.shell_in(work_dir, create=True) as shell:
         git_repo = shell.git_repo(sitename, origin=repo_path, create=True)
-        git_repo.checkout("master")
+        git_repo.checkout("main")
 
     copy_from: str
 

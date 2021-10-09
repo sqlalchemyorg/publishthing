@@ -72,7 +72,7 @@ def github_hook(
 
             git.fetch(all_=True)
 
-            # checkout the base branch as detached, usually master
+            # checkout the base branch as detached, usually main
             git.checkout("origin/%s" % (target_branch,), detached=True)
 
             # sets everything up for gerrit
