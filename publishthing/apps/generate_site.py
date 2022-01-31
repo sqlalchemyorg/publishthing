@@ -40,8 +40,7 @@ def main(argv: Optional[List[str]] = None) -> None:
     parser.add_argument(
         "--branch",
         type=str,
-        default="main",
-        help="Branch name to check out on",
+        help="Branch name to check out on, by default no checkout occurs",
     )
     parser.add_argument("source", type=str, help="Source repository path")
     parser.add_argument(
@@ -65,7 +64,10 @@ def main(argv: Optional[List[str]] = None) -> None:
     work_dir: str = os.path.join(os.path.dirname(repo_path), "work")
     with thing.shell_in(work_dir, create=True) as shell:
         git_repo = shell.git_repo(sitename, origin=repo_path, create=True)
-        git_repo.checkout(args.branch)
+        if args.branch:
+            git_repo.checkout(args.branch)
+        else:
+            git_repo.pull_current()
 
     copy_from: str
 
