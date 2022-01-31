@@ -37,6 +37,12 @@ def main(argv: Optional[List[str]] = None) -> None:
         type=str,
         help="Fully qualified domain name, defaults to dirname of repo",
     )
+    parser.add_argument(
+        "--branch",
+        type=str,
+        default="main",
+        help="Branch name to check out on",
+    )
     parser.add_argument("source", type=str, help="Source repository path")
     parser.add_argument(
         "destination", choices=["local", "s3"], help="Destination"
@@ -59,7 +65,7 @@ def main(argv: Optional[List[str]] = None) -> None:
     work_dir: str = os.path.join(os.path.dirname(repo_path), "work")
     with thing.shell_in(work_dir, create=True) as shell:
         git_repo = shell.git_repo(sitename, origin=repo_path, create=True)
-        git_repo.checkout("main")
+        git_repo.checkout(args.branch)
 
     copy_from: str
 
