@@ -65,7 +65,7 @@ def github_hook(
         with thing.shell_in(workdir).shell_in(owner, create=True) as shell:
 
             git = shell.git_repo(
-                project, origin=pr["base"]["repo"]["git_url"], create=True
+                project, origin=pr["base"]["repo"]["ssh_url"], create=True
             )
 
             target_branch = pr["base"]["ref"]

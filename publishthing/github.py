@@ -397,6 +397,9 @@ class GithubRepo:
     def _scan_attachments(self, body: str) -> Iterator[Tuple[str, str]]:
         # not sure if the repo stays constant in the bodies if the
         # repo is moved to a different owner/name
+        if not body:
+            body = ""
+
         for m in re.finditer(
             r"https://github.com/.+?/.+?/files/\d+/(\S*\w)", body
         ):
