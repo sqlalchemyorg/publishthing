@@ -62,7 +62,7 @@ def run_sync(
                 g for g in release_match.group(2, 3, 4) if g
             )
             if release_match.group(5):
-                tag += release_match.group(5)
+                tag += release_match.group(5).replace(".", "_")
         elif tag_template == "v.":
             tag = "v" + ".".join(g for g in release_match.group(2, 3, 4) if g)
             if release_match.group(5):
