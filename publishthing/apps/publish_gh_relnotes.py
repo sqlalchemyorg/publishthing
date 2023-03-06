@@ -9,7 +9,7 @@ from .. import github
 from .. import publishthing
 
 RE_release = re.compile(
-    r"^((\d)\.(\d+))(?:\.(\d+))?((?:a|b|c|rc)\d)?$", re.I | re.X
+    r"^((\d)\.(\d+))(?:\.(\d+))?((?:a|b|c|rc|\.post)\d)?$", re.I | re.X
 )
 
 
