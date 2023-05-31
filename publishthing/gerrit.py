@@ -310,7 +310,7 @@ class GerritHook(Hooks):
             parser.add_argument("--%s" % cat, type=int)
             parser.add_argument("--%s-oldValue" % cat, type=int)
 
-        opts = parser.parse_args(argv)
+        opts, other_args = parser.parse_known_args(argv)
         if opts.hook:
             hook = opts.hook
         else:
