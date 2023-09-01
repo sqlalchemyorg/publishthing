@@ -247,7 +247,7 @@ def gerrit_hook(thing: publishthing.PublishThing) -> None:
                             opts.change_url,
                             gerrit_file_comment["author"]["name"],
                             gerrit_file_comment["author"]["username"],
-                            gerrit_file_comment["message"],
+                            gerrit_file_comment.get("message", "(no message)"),
                         ),
                     }
                 )
@@ -257,7 +257,11 @@ def gerrit_hook(thing: publishthing.PublishThing) -> None:
                 # available in github.  add these lines separately
                 outgoing_external_line_comments.append(
                     "* %s (line %s): %s"
-                    % (path, line_number, gerrit_file_comment["message"])
+                    % (
+                        path,
+                        line_number,
+                        gerrit_file_comment.get("message", "(no message)"),
+                    )
                 )
 
         github_comment_body = util.format_gerrit_comment_for_github(
