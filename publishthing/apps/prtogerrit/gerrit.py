@@ -6,7 +6,6 @@ from ... import publishthing
 
 
 def gerrit_hook(thing: publishthing.PublishThing) -> None:
-
     # unfortunately there's no gerrit event for "vote removed"
     # in the hooks plugin, even though "stream events" has it.
     # this will cause the github status to be wrong until another comment
@@ -232,7 +231,9 @@ def gerrit_hook(thing: publishthing.PublishThing) -> None:
                                     opts.change_url,
                                     gerrit_file_comment["author"]["name"],
                                     gerrit_file_comment["author"]["username"],
-                                    gerrit_file_comment["message"],
+                                    gerrit_file_comment.get(
+                                        "message", "(no message)"
+                                    ),
                                 ),
                             }
                         )
@@ -263,7 +264,7 @@ def gerrit_hook(thing: publishthing.PublishThing) -> None:
             opts.change_url,
             lead_gerrit_comment["author"]["name"],
             lead_gerrit_comment["author"]["username"],
-            lead_gerrit_comment["message"],
+            lead_gerrit_comment.get("message", "code review left on gerrit"),
         )
 
         if outgoing_inline_comments or outgoing_external_line_comments:
