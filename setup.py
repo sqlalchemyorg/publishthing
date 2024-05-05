@@ -20,7 +20,7 @@ setup(
         "publishthing.apps.prtogerrit",
     ],
     zip_safe=False,
-    install_requires=["webob", "boto", "requests", "unidiff"],
+    install_requires=["webob", "boto3", "requests", "unidiff"],
     entry_points={
         "console_scripts": [
             "publishthing = publishthing.apps.generate_site:main",

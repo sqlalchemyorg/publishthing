@@ -6,8 +6,8 @@ from typing import Callable
 from typing import Optional
 from typing import Tuple
 
-import boto
-import boto.s3.connection
+import boto3
+import boto3.s3.connection
 
 from . import publishthing  # noqa
 
@@ -29,8 +29,8 @@ def s3_upload(
                     queue.put((os.path.join(root, lfile), file))
 
     def consumer(queue: "Queue[_WorkQueueItem]") -> None:
-        conn = boto.connect_s3(
-            calling_format=boto.s3.connection.OrdinaryCallingFormat()
+        conn = boto3.connect_s3(
+            calling_format=boto3.s3.connection.OrdinaryCallingFormat()
         )
         bucket = conn.get_bucket(s3_bucket)
 
