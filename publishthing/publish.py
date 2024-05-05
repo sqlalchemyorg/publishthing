@@ -2,8 +2,9 @@ import os
 from typing import Optional
 
 from . import publishthing  # noqa
-from . import s3push
 from .git import GitRepo
+
+# from . import s3push
 
 
 class Publisher:
@@ -13,7 +14,6 @@ class Publisher:
     def blogofile_build(
         self, git_checkout: GitRepo, subdir: Optional[str] = None
     ) -> str:
-
         return self._ofile_build("blogofile", git_checkout, subdir=subdir)
 
     def zeekofile_build(
@@ -68,6 +68,7 @@ class Publisher:
                 )
 
     def publish_s3(self, copy_from: str, sitename: str, dry: bool) -> None:
+        raise NotImplementedError("FIXME: port to boto3")
         self.thing.message(
             "%sPublishing %s to S3 bucket %s",
             "(dry) " if dry else "",
