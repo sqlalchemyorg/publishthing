@@ -66,9 +66,7 @@ def main(argv: Optional[List[str]] = None) -> None:
 
     copy_from: str
 
-    if args.blogofile:
-        copy_from = thing.publisher.blogofile_build(git_repo, args.repo_prefix)
-    elif args.zeekofile:
+    if args.zeekofile:
         copy_from = thing.publisher.zeekofile_build(git_repo, args.repo_prefix)
     else:
         if args.repo_prefix:
