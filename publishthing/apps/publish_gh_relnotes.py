@@ -95,7 +95,7 @@ def run_sync(
 
         release_rec = {
             "tag_name": tag,
-            # docs: https://docs.github.com/en/rest/reference/repos#create-a-release
+            # docs: https://docs.github.com/en/rest/reference/repos#create-a-release  # noqa: E501
             # target_commitish defaults to repos main branch name
             # "target_commitish": "main",
             "name": formatted_release,

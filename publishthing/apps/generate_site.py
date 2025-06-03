@@ -10,9 +10,6 @@ def main(argv: Optional[List[str]] = None) -> None:
     parser = argparse.ArgumentParser()
 
     parser.add_argument(
-        "--blogofile", action="store_true", help="Run blogofile"
-    )
-    parser.add_argument(
         "--zeekofile", action="store_true", help="Run zeekofile"
     )
     parser.add_argument("--type", help="legacy", type=str)
@@ -43,9 +40,7 @@ def main(argv: Optional[List[str]] = None) -> None:
         help="Branch name to check out on, by default no checkout occurs",
     )
     parser.add_argument("source", type=str, help="Source repository path")
-    parser.add_argument(
-        "destination", choices=["local", "s3"], help="Destination"
-    )
+    parser.add_argument("destination", choices=["local"], help="Destination")
     args = parser.parse_args(argv)
 
     # path to a bare git repo where the stuff is.
@@ -87,7 +82,5 @@ def main(argv: Optional[List[str]] = None) -> None:
         thing.publisher.publish_local(
             copy_from, sitename, args.local_base, args.local_prefix, args.dry
         )
-    elif args.destination == "s3":
-        thing.publisher.publish_s3(copy_from, sitename, args.dry)
     else:
         thing.cmd_error("no destination specified")

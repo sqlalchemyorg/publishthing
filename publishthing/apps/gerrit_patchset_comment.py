@@ -41,6 +41,7 @@ will post to the Github repository ``orgname/projectname``, to that issue
 number.
 
 """
+
 import collections
 import difflib
 import re

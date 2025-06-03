@@ -415,7 +415,11 @@ class GithubRepo:
             abs_ = (
                 "https://github.com/%s/wiki/"
                 "imported_issue_attachments/%s/%s"
-                % (self.repo, int_num, filename)
+                % (
+                    self.repo,
+                    int_num,
+                    filename,
+                )
             )
             yield filename, abs_
 

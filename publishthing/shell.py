@@ -60,7 +60,7 @@ class Shell:
         self,
         *args: str,
         include_stderr: bool = False,
-        none_for_error: bool = False
+        none_for_error: bool = False,
     ) -> Any:
         self.thing.debug("shell", " ".join(args))
 

@@ -269,9 +269,9 @@ def github_hook(
             gh_repo, pr["number"], existing_pullreq=pr
         )
 
-        inline_comments: Dict[
-            str, List[Dict[str, Union[str, int]]]
-        ] = collections.defaultdict(list)
+        inline_comments: Dict[str, List[Dict[str, Union[str, int]]]] = (
+            collections.defaultdict(list)
+        )
         non_inline_comments = []
 
         for comment in comments_to_post:
@@ -291,9 +291,11 @@ def github_hook(
                         "message": util.format_github_comment_for_gerrit(
                             github_user, comment["body"]
                         ),
-                        "side": "REVISION"
-                        if not gerrit_file_position.is_parent
-                        else "PARENT",
+                        "side": (
+                            "REVISION"
+                            if not gerrit_file_position.is_parent
+                            else "PARENT"
+                        ),
                     }
                 )
 
