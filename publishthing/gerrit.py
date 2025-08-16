@@ -221,13 +221,15 @@ class GerritGit:
             )
 
             # pull the gerrit review link from the git review message
-            gerrit_link = re.search(
-                r"https://%s\S+" % gerrit_host, output, re.S
-            )
+            searching_for_link = r"https://%s\S+" % gerrit_host
+            gerrit_link = re.search(searching_for_link, output, re.S)
             if gerrit_link:
                 return gerrit_link.group(0)
             else:
-                raise Exception("Could not locate PR link: %s" % output)
+                raise Exception(
+                    f"Regular expression {searching_for_link!r} could not "
+                    f"locate PR link in content: {output}"
+                )
 
     def _create_change_id(self, change_msg: str) -> str:
         with self.git.checkout_shell().shell_in(".git") as subshell:
