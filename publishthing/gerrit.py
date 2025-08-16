@@ -146,7 +146,11 @@ class GerritGit:
         # set up for gerrit.  we want to use https w/ username/password and
         # git review doesn't do that
         # set up the gerrit remote based on https, not ssh
-        gerrit_host = self.gerritconfig["gerrit"]["host"]
+
+        if "httphost" in self.gerritconfig["gerrit"]:
+            gerrit_host = self.gerritconfig["gerrit"]["httphost"]
+        else:
+            gerrit_host = self.gerritconfig["gerrit"]["host"]
         gerrit_project = self.gerritconfig["gerrit"]["project"]
 
         with self.git.checkout_shell() as gr_shell:
