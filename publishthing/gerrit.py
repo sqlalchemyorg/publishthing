@@ -208,7 +208,10 @@ class GerritGit:
     def review(self) -> str:
         with self.git.checkout_shell() as gr_shell:
             branch = self.gerritconfig["gerrit"]["defaultbranch"]
-            gerrit_host = self.gerritconfig["gerrit"]["host"]
+            if "httphost" in self.gerritconfig["gerrit"]:
+                gerrit_host = self.gerritconfig["gerrit"]["httphost"]
+            else:
+                gerrit_host = self.gerritconfig["gerrit"]["host"]
             output = gr_shell.output_shell_cmd(
                 "git",
                 "push",
