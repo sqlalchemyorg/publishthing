@@ -1,4 +1,5 @@
 import argparse
+from datetime import datetime
 import multiprocessing
 import multiprocessing.pool
 import os
@@ -56,6 +57,11 @@ def run_sync(gh: github.GithubRepo, destination: str) -> None:
                         % (url, gh.url)
                     )
 
+                try:
+                    datetime.fromisoformat(last_received)
+                except ValueError:
+                    last_received = None
+
         highest_timestamp = None
 
         pool = multiprocessing.Pool(WORKERS)
@@ -70,6 +76,7 @@ def run_sync(gh: github.GithubRepo, destination: str) -> None:
                     name,
                     highest_timestamp,
                 )
+                assert highest_timestamp
                 workdir.write_file(
                     last_received_filename,
                     "%s\n%s" % (gh.url, highest_timestamp),
