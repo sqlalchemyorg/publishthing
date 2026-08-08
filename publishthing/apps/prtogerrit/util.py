@@ -6,6 +6,7 @@ from typing import Iterable
 from typing import List
 from typing import NamedTuple
 from typing import Optional
+from typing import Tuple
 from typing import Union
 
 import unidiff
@@ -146,6 +147,38 @@ def github_pr_is_authorized_reviewer_request(
     return is_reviewer_request
 
 
+def strip_gerrit_message_preamble(message: str) -> str:
+    """Remove the boilerplate Gerrit prepends to a change message.
+
+    Gerrit change messages lead with "Patch Set N:", and when the review
+    included file comments, a "(N comments)" line after that.  Neither is
+    useful once the message is mirrored to github.
+
+    """
+
+    message = re.sub(r"^\s*Patch Set \d+:\s*", "", message)
+    message = re.sub(r"^\(\d+ comments?\)\s*", "", message)
+    return message.strip()
+
+
+def gerrit_author_names(
+    author: Optional[gerrit.GerritJsonRec],
+) -> Tuple[str, str]:
+    """Return a (fullname, username) pair for a gerrit account record.
+
+    Every field of gerrit's account record is optional; service accounts in
+    particular often carry only some of them, so fall back down the chain
+    rather than assuming any one key is present.
+
+    """
+
+    if not author:
+        return "(unknown)", "unknown"
+
+    username = author.get("username") or author.get("email") or "unknown"
+    return author.get("name") or username, username
+
+
 def format_gerrit_comment_for_github(
     change_url: str, author_fullname: str, author_username: str, message: str
 ) -> str:
@@ -156,7 +189,7 @@ def format_gerrit_comment_for_github(
             r"<?[\w_\.]+@[\w_\.]+>?", "", author_fullname
         ).strip('" ')
 
-    message = re.sub(r"^\s*Patch Set \d+:\s*", "", message)
+    message = strip_gerrit_message_preamble(message)
 
     return "**%s** (%s) wrote:\n\n%s\n\nView this in Gerrit at %s" % (
         author_fullname,
@@ -176,6 +209,10 @@ def format_github_comment_for_gerrit(
 class GerritComments:
     """operations and services specific to the list of comments on a
     gerrit review."""
+
+    # pseudo-path gerrit uses in the inline comment map for the cover
+    # message of a review left in the web UI.
+    PATCHSET_LEVEL = "/PATCHSET_LEVEL"
 
     def __init__(self, gerrit_api: gerrit.GerritApi, change: str) -> None:
 
@@ -221,16 +258,27 @@ class GerritComments:
                         "commit_id": item["commit_id"],
                         "line_comments": [],
                         "author": item["author"],
-                        "command_line_message": _change_message_id_to_msg[
-                            change_message_id
-                        ],
+                        # the inline comments and the change messages come
+                        # from two separate API calls, so a message id seen
+                        # here may have no corresponding change message.
+                        # empty string means "no command line message", which
+                        # callers fall back away from.
+                        "command_line_message": _change_message_id_to_msg.get(
+                            change_message_id, ""
+                        ),
                     }
-                if "line" in item:
-                    lead_comment["line_comments"].append(item)
-                    item["path"] = file_
+
+                if file_ == self.PATCHSET_LEVEL:
+                    # the cover message of the review; merge it into the lead
+                    # comment so that "message" is the review body.  don't
+                    # let a second one clobber the first.
+                    if "message" not in lead_comment:
+                        lead_comment.update(item)
                 else:
-                    assert "message" not in lead_comment
-                    lead_comment.update(item)
+                    # a line comment, or a comment on a file as a whole, in
+                    # which case there's no "line" key at all.
+                    item["path"] = file_
+                    lead_comment["line_comments"].append(item)
 
         self._lead_comments = sorted(
             gerrit_comments_by_change_message_id.values(),
@@ -241,6 +289,11 @@ class GerritComments:
         return iter(self._lead_comments)
 
     def _compare_message(self, message: str, hook_message: str) -> bool:
+        # an absent message compares equal to nothing at all; otherwise a
+        # comment we failed to look up would match any empty hook message.
+        if not message or not hook_message:
+            return False
+
         return re.sub(
             r"(?:^Patch Set \d+\:)|\\.|\n|\t", "", message
         ) == re.sub(r"(?:^Patch Set \d+\:)|\\.|\n|\t", "", hook_message)
@@ -255,7 +308,7 @@ class GerritComments:
         for lead_gerrit_comment in reversed(self._lead_comments):
             if (
                 self._compare_message(
-                    lead_gerrit_comment["command_line_message"], text
+                    lead_gerrit_comment.get("command_line_message", ""), text
                 )
                 or "message" in lead_gerrit_comment
                 and self._compare_message(lead_gerrit_comment["message"], text)
