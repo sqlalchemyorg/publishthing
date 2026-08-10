@@ -16,6 +16,7 @@ import pytest
 
 REPO = "sqlalchemy/testgerrit"
 LABEL = "open for pull requests"
+REVIEW_LABEL = "code review in progress"
 
 
 class FakeRepo:
@@ -261,3 +262,74 @@ def test_close_reason_falls_back_when_only_closed_issues():
     repo = FakeRepo({1: issue(state="closed", labels=[LABEL])})
     result = util.evaluate_pr(repo, REPO, "someone", "fix", "#1", LABEL)
     assert result == util.GateResult("close", util.CLOSE_ISSUE_CLOSED, 1)
+
+
+def test_issue_in_review_closes():
+    repo = FakeRepo({5: issue(labels=[REVIEW_LABEL])})
+    result = util.evaluate_pr(repo, REPO, "someone", "fix", "#5", LABEL)
+    assert result == util.GateResult("close", util.CLOSE_ISSUE_IN_REVIEW, 5)
+
+
+def test_in_review_is_the_most_specific_close_reason():
+    # "someone is already working on this" is more useful to a
+    # contributor than "nobody has authorized this yet"
+    repo = FakeRepo(
+        {
+            1: issue(state="closed", labels=[LABEL]),
+            2: issue(labels=["bug"]),
+            3: issue(labels=[REVIEW_LABEL]),
+        }
+    )
+    result = util.evaluate_pr(repo, REPO, "someone", "fix", "#1 #2 #3", LABEL)
+    assert result == util.GateResult("close", util.CLOSE_ISSUE_IN_REVIEW, 3)
+
+
+def test_claim_holder_is_allowed_back_in():
+    """The reopen path for a pull request that already claimed its issue.
+
+    By the time it is reopened the issue no longer carries the label
+    that let it through, so without the claim the gate would close the
+    very pull request it previously accepted.
+
+    """
+
+    repo = FakeRepo({5: issue(labels=[REVIEW_LABEL])})
+    result = util.evaluate_pr(
+        repo,
+        REPO,
+        "someone",
+        "fix",
+        "#5",
+        LABEL,
+        holds_claim=lambda issue_number: issue_number == 5,
+    )
+    assert result == util.GateResult("allow", util.ALLOW_EXISTING_CLAIM, 5)
+
+
+def test_claim_on_a_different_issue_does_not_let_you_in():
+    repo = FakeRepo({5: issue(labels=[REVIEW_LABEL])})
+    result = util.evaluate_pr(
+        repo,
+        REPO,
+        "someone",
+        "fix",
+        "#5",
+        LABEL,
+        holds_claim=lambda issue_number: issue_number == 99,
+    )
+    assert result == util.GateResult("close", util.CLOSE_ISSUE_IN_REVIEW, 5)
+
+
+def test_open_for_prs_wins_over_in_review():
+    # if both labels are somehow present, the issue is open for work
+    repo = FakeRepo({5: issue(labels=[LABEL, REVIEW_LABEL])})
+    result = util.evaluate_pr(repo, REPO, "someone", "fix", "#5", LABEL)
+    assert result == util.GateResult("allow", util.ALLOW_QUALIFIED_ISSUE, 5)
+
+
+def test_review_label_is_configurable():
+    repo = FakeRepo({5: issue(labels=["under review"])})
+    result = util.evaluate_pr(
+        repo, REPO, "someone", "fix", "#5", LABEL, review_label="under review"
+    )
+    assert result == util.GateResult("close", util.CLOSE_ISSUE_IN_REVIEW, 5)

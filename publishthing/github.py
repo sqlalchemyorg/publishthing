@@ -5,8 +5,10 @@ import time
 from typing import Any
 from typing import Dict
 from typing import Iterator
+from typing import List
 from typing import Optional
 from typing import Tuple
+from urllib.parse import quote
 
 import requests
 
@@ -142,6 +144,25 @@ class GithubRepo:
 
         return resp
 
+    def _api_delete(
+        self, url: str, ignore_404: bool = False
+    ) -> Optional[requests.Response]:
+        self._wait_for_api()
+        resp = self.session.delete(
+            url,
+            headers={"Authorization": "token %s" % self.access_token},
+        )
+        if resp.status_code > 299:
+            if ignore_404 and resp.status_code == 404:
+                return None
+
+            raise Exception(
+                "Got response %s for %s: %s"
+                % (resp.status_code, url, resp.content)
+            )
+
+        return resp
+
     def get_user_permission(self, username) -> GithubJsonRec:
         url = "https://api.github.com/repos/%s/collaborators/%s/permission" % (
             self.repo,
@@ -186,6 +207,28 @@ class GithubRepo:
             self.repo,
         )
         return self._yield_with_links(url)
+
+    def add_issue_labels(self, issue_number: str, labels: List[str]) -> None:
+        url = "https://api.github.com/repos/%s/issues/%s/labels" % (
+            self.repo,
+            issue_number,
+        )
+        self._api_post(url, rec={"labels": labels})
+
+    def remove_issue_label(self, issue_number: str, label: str) -> None:
+        """Remove a label from an issue.
+
+        A label that isn't on the issue produces a 404, which is not an
+        error for our purposes; the desired end state is the same.
+
+        """
+
+        url = "https://api.github.com/repos/%s/issues/%s/labels/%s" % (
+            self.repo,
+            issue_number,
+            quote(label),
+        )
+        self._api_delete(url, ignore_404=True)
 
     def create_label(self, name: str, color: str, description: str) -> None:
         url = "https://api.github.com/repos/%s/labels" % (self.repo,)

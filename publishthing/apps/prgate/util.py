@@ -1,4 +1,5 @@
 import re
+from typing import Callable
 from typing import List
 from typing import NamedTuple
 from typing import Optional
@@ -7,9 +8,17 @@ from ... import github
 
 DEFAULT_LABEL = "open for pull requests"
 
+# applied to the issue once a pull request has claimed it, and removed
+# from that same issue.  the swap is what keeps a second pull request --
+# increasingly, a bot-written one -- from landing on top of work already
+# under review.  note this label is also applied by hand for a review
+# happening purely in gerrit with no github pull request at all.
+DEFAULT_REVIEW_LABEL = "code review in progress"
+
 # reasons a pull request was allowed through
 ALLOW_MAINTAINER = "maintainer"
 ALLOW_QUALIFIED_ISSUE = "qualified_issue"
+ALLOW_EXISTING_CLAIM = "existing_claim"
 
 # reasons a pull request was closed, in increasing order of specificity;
 # when several referenced issues each fail, the most specific reason is
@@ -18,11 +27,13 @@ ALLOW_QUALIFIED_ISSUE = "qualified_issue"
 CLOSE_NO_ISSUE = "no_issue"
 CLOSE_ISSUE_CLOSED = "issue_closed"
 CLOSE_ISSUE_UNLABELED = "issue_unlabeled"
+CLOSE_ISSUE_IN_REVIEW = "issue_in_review"
 
 _CLOSE_SPECIFICITY = {
     CLOSE_NO_ISSUE: 0,
     CLOSE_ISSUE_CLOSED: 1,
     CLOSE_ISSUE_UNLABELED: 2,
+    CLOSE_ISSUE_IN_REVIEW: 3,
 }
 
 _FENCED_CODE = re.compile(r"^(```|~~~).*?^\1", re.S | re.M)
@@ -146,7 +157,9 @@ def evaluate_pr(
     title: Optional[str],
     body: Optional[str],
     label: str = DEFAULT_LABEL,
+    review_label: str = DEFAULT_REVIEW_LABEL,
     exempt_maintainers: bool = True,
+    holds_claim: Optional[Callable[[int], bool]] = None,
 ) -> GateResult:
     """Decide whether a pull request is authorized.
 
@@ -154,6 +167,13 @@ def evaluate_pr(
     issue in this same repo that is open and carries ``label``.  The
     first qualifying issue wins, so a pull request citing several issues
     passes if any one of them was authorized.
+
+    An issue carrying ``review_label`` instead has already been claimed
+    by some pull request, and is closed to any other.  ``holds_claim``
+    is called with an issue number to ask whether *this* pull request is
+    the one that claimed it; that's what lets an accepted pull request
+    survive being closed and reopened, since by then the labels on its
+    issue have already been swapped.
 
     """
 
@@ -165,6 +185,7 @@ def evaluate_pr(
         return GateResult("close", CLOSE_NO_ISSUE, None)
 
     label_key = label.lower()
+    review_label_key = review_label.lower()
     best: Optional[GateResult] = None
 
     for number in references:
@@ -182,13 +203,25 @@ def evaluate_pr(
             continue
 
         names = {rec["name"].lower() for rec in issue.get("labels") or ()}
-        if label_key not in names:
+
+        if label_key in names:
+            return GateResult("allow", ALLOW_QUALIFIED_ISSUE, number)
+
+        if review_label_key in names:
+            # already claimed.  the one pull request allowed past this is
+            # the one that did the claiming, coming back around after a
+            # close and reopen.
+            if holds_claim is not None and holds_claim(number):
+                return GateResult("allow", ALLOW_EXISTING_CLAIM, number)
+
             best = _more_specific(
-                best, GateResult("close", CLOSE_ISSUE_UNLABELED, number)
+                best, GateResult("close", CLOSE_ISSUE_IN_REVIEW, number)
             )
             continue
 
-        return GateResult("allow", ALLOW_QUALIFIED_ISSUE, number)
+        best = _more_specific(
+            best, GateResult("close", CLOSE_ISSUE_UNLABELED, number)
+        )
 
     # every reference either failed or didn't resolve to a real issue
     return best or GateResult("close", CLOSE_NO_ISSUE, None)

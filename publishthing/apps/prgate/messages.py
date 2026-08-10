@@ -20,9 +20,19 @@ from . import util
 # pull request and not repeat itself if github redelivers a webhook.
 MARKER_PREFIX = "<!-- prgate"
 
+# hidden marker recording that this pull request is the one that claimed
+# an issue.  it has to survive on the pull request itself, because by the
+# time the pull request is closed and reopened the issue no longer
+# carries the label that let it through the first time.
+CLAIM_MARKER_PREFIX = "<!-- prgate-claim"
+
 
 def marker(reason: str, sha: str) -> str:
     return "%s:%s:%s -->" % (MARKER_PREFIX, reason, sha)
+
+
+def claim_marker(issue: int) -> str:
+    return "%s:%s -->" % (CLAIM_MARKER_PREFIX, issue)
 
 
 _INTRO = "Hi, and thanks for the pull request!"
@@ -64,6 +74,15 @@ _STEPS_CLOSED = (
     "reopen this pull request."
 )
 
+_STEPS_IN_REVIEW = (
+    "This pull request references issue #%(issue)s, which is already "
+    "marked **%(review_label)s** -- someone is working on it, either in "
+    "another pull request or directly in gerrit -- so I'm closing this "
+    "one automatically to keep the two from landing on top of each "
+    "other. If you think your approach is better than the one in "
+    "review, the place to make that case is on #%(issue)s."
+)
+
 _NOT_A_JUDGMENT = (
     "This is automatic and procedural. It isn't a judgment on your "
     "change, and nothing you've written here is lost."
@@ -71,17 +90,49 @@ _NOT_A_JUDGMENT = (
 
 _SIGNOFF = "Thanks for your interest in the project!"
 
+_ACCEPTED = (
+    "Thanks! Issue #%(issue)s is now marked **%(review_label)s** and no "
+    "longer **%(label)s**, so this pull request holds the review for it "
+    "and another one won't land on top of your work. If this pull "
+    "request is abandoned, a maintainer can put **%(label)s** back on "
+    "#%(issue)s to reopen it to others."
+)
+
+
+def accepted_message(issue: int, label: str, review_label: str) -> str:
+    """Assemble the comment left on a pull request that claims an issue.
+
+    Besides telling the contributor why the labels on the issue just
+    changed, this comment is where the claim itself is recorded; see
+    ``claim_marker``.
+
+    """
+
+    return "\n\n".join(
+        [
+            claim_marker(issue),
+            _ACCEPTED
+            % {
+                "issue": issue,
+                "label": label,
+                "review_label": review_label,
+            },
+        ]
+    )
+
 
 def close_message(
     result: util.GateResult,
     label: str,
     sha: str,
+    review_label: str = util.DEFAULT_REVIEW_LABEL,
     policy_url: Optional[str] = None,
 ) -> str:
     """Assemble the comment for a pull request being closed."""
 
     subs = {
         "label": label,
+        "review_label": review_label,
         "issue": result.issue,
         # deliberately not a number: text copied out of this comment
         # into a pull request body must not read as a real reference to
@@ -93,6 +144,8 @@ def close_message(
         steps = _STEPS_UNLABELED
     elif result.reason == util.CLOSE_ISSUE_CLOSED:
         steps = _STEPS_CLOSED
+    elif result.reason == util.CLOSE_ISSUE_IN_REVIEW:
+        steps = _STEPS_IN_REVIEW
     else:
         steps = _STEPS_NO_ISSUE
 

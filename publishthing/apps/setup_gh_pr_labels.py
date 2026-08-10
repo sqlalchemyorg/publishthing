@@ -1,4 +1,4 @@
-"""Create the "open for pull requests" label on one or more repos.
+"""Create the pull request gate's labels on one or more repos.
 
 Idempotent, so it's safe to re-run across the whole set::
 
@@ -6,28 +6,48 @@ Idempotent, so it's safe to re-run across the whole set::
         sqlalchemy/sqlalchemy sqlalchemy/alembic \\
         sqlalchemy/mako sqlalchemy/dogpile.cache
 
-The label name has to match what the webhook gate is configured with
+The names have to match what the webhook gate is configured with
 exactly; a mismatch silently closes every pull request against that
-repo, which is why creating it by hand in four web UIs is a bad idea.
+repo, which is why creating these by hand in four web UIs is a bad idea.
+
+The "code review in progress" definition here matches the one that has
+been in use on sqlalchemy/sqlalchemy by hand for years, so running this
+against that repo leaves the existing label alone.
 
 """
 
 import argparse
 from typing import List
+from typing import NamedTuple
 from typing import Optional
 
 from .prgate import util
 from .. import publishthing
 
-DEFAULT_COLOR = "0e8a16"
-DEFAULT_DESCRIPTION = (
-    "Maintainers have approved this issue for an outside pull request"
-)
+
+class LabelSpec(NamedTuple):
+    name: str
+    color: str
+    description: str
+
+
+LABELS = [
+    LabelSpec(
+        util.DEFAULT_LABEL,
+        "0e8a16",
+        "Maintainers have approved this issue for an outside pull request",
+    ),
+    LabelSpec(
+        util.DEFAULT_REVIEW_LABEL,
+        "4B98F5",
+        "code has been provided that's in review as PR and/or gerrit",
+    ),
+]
 
 
 def main(argv: Optional[List[str]] = None) -> None:
     parser = argparse.ArgumentParser(
-        description="create the pull request gate label on github repos"
+        description="create the pull request gate labels on github repos"
     )
     parser.add_argument(
         "repo", nargs="+", help="user/reponame string on github"
@@ -35,13 +55,6 @@ def main(argv: Optional[List[str]] = None) -> None:
     parser.add_argument(
         "--access-token", type=str, required=True, help="oauth access token"
     )
-    parser.add_argument(
-        "--label", type=str, default=util.DEFAULT_LABEL, help="label name"
-    )
-    parser.add_argument(
-        "--color", type=str, default=DEFAULT_COLOR, help="hex color, no '#'"
-    )
-    parser.add_argument("--description", type=str, default=DEFAULT_DESCRIPTION)
 
     opts = parser.parse_args(argv)
 
@@ -51,8 +64,10 @@ def main(argv: Optional[List[str]] = None) -> None:
         gh_repo = thing.github_repo(repo)
 
         existing = {rec["name"].lower() for rec in gh_repo.get_labels()}
-        if opts.label.lower() in existing:
-            print("%s: label %r already present" % (repo, opts.label))
-        else:
-            gh_repo.create_label(opts.label, opts.color, opts.description)
-            print("%s: created label %r" % (repo, opts.label))
+
+        for spec in LABELS:
+            if spec.name.lower() in existing:
+                print("%s: label %r already present" % (repo, spec.name))
+            else:
+                gh_repo.create_label(spec.name, spec.color, spec.description)
+                print("%s: created label %r" % (repo, spec.name))

@@ -24,6 +24,7 @@ opened pull request, which is noise on one the gate is about to close.
 
 from typing import Any
 from typing import Dict
+from typing import Optional
 
 from . import messages
 from . import util
@@ -43,8 +44,8 @@ def github_hook(
 
     ``repos`` maps "owner/name" to a config dict; one wsgi app serves
     every project, so a repo absent from this mapping is ignored
-    entirely.  Recognized keys are "label", "exempt_maintainers" and
-    "policy_url".
+    entirely.  Recognized keys are "label", "review_label",
+    "exempt_maintainers" and "policy_url".
 
     ``close_pull_requests=False`` leaves the comment but doesn't close,
     which is the way to defang the gate from configuration alone if the
@@ -64,12 +65,16 @@ def github_hook(
             return
 
         label = entry.get("label", util.DEFAULT_LABEL)
+        review_label = entry.get("review_label", util.DEFAULT_REVIEW_LABEL)
         pull_request = event.json_data["pull_request"]
         number = str(event.json_data["number"])
         sender = event.json_data["sender"]["login"]
         sha = pull_request["head"]["sha"]
 
         gh_repo = thing.github_repo(event.repo_name)
+
+        def holds_claim(issue_number: int) -> bool:
+            return _holds_claim(gh_repo, number, issue_number)
 
         result = util.evaluate_pr(
             gh_repo,
@@ -78,7 +83,9 @@ def github_hook(
             pull_request["title"],
             pull_request["body"],
             label=label,
+            review_label=review_label,
             exempt_maintainers=entry.get("exempt_maintainers", True),
+            holds_claim=holds_claim,
         )
 
         thing.debug(
@@ -99,10 +106,23 @@ def github_hook(
         )
 
         if result.action == "allow":
+            if result.reason == util.ALLOW_QUALIFIED_ISSUE:
+                _claim_issue(
+                    gh_repo, number, result.issue, label, review_label
+                )
+                request.add_text(
+                    "prgate: claimed issue #%s for #%s",
+                    str(result.issue),
+                    number,
+                )
             return
 
         message = messages.close_message(
-            result, label, sha, policy_url=entry.get("policy_url")
+            result,
+            label,
+            sha,
+            review_label=review_label,
+            policy_url=entry.get("policy_url"),
         )
 
         # github redelivers webhooks, and a reopen re-runs the gate; only
@@ -136,3 +156,46 @@ def _already_commented(
         if marker in (comment.get("body") or ""):
             return True
     return False
+
+
+def _holds_claim(
+    gh_repo: github.GithubRepo, number: str, issue_number: int
+) -> bool:
+    """True if this pull request is the one that claimed the issue."""
+
+    marker = messages.claim_marker(issue_number)
+    for comment in gh_repo.get_issue_comments(number):
+        if marker in (comment.get("body") or ""):
+            return True
+    return False
+
+
+def _claim_issue(
+    gh_repo: github.GithubRepo,
+    number: str,
+    issue_number: Optional[int],
+    label: str,
+    review_label: str,
+) -> None:
+    """Move the issue from "open for pull requests" to "in review".
+
+    Adding the review label before removing the other one means that a
+    failure between the two leaves the issue closed to new pull requests
+    rather than open to all of them, which is the safer way to land.
+
+    Nothing ever puts the labels back automatically: pull requests here
+    are merged from gerrit rather than on github, so every pull request
+    ends up closed-not-merged and "the pull request was closed" carries
+    no signal about whether the work is done.
+
+    """
+
+    if issue_number is None:
+        return
+
+    issue = str(issue_number)
+    gh_repo.add_issue_labels(issue, [review_label])
+    gh_repo.remove_issue_label(issue, label)
+    gh_repo.publish_issue_comment(
+        number, messages.accepted_message(issue_number, label, review_label)
+    )

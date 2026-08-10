@@ -19,6 +19,7 @@ import pytest
 
 REPO = "sqlalchemy/testgerrit"
 LABEL = "open for pull requests"
+REVIEW_LABEL = "code review in progress"
 SHA = "abc123"
 
 
@@ -33,6 +34,8 @@ class FakeRepo:
         self.permission = permission
         self.comments = list(comments or ())
         self.closed: List[str] = []
+        self.labels_added: List[Any] = []
+        self.labels_removed: List[Any] = []
 
     def get_user_permission(self, username: str) -> Optional[Dict[str, Any]]:
         if self.permission is None:
@@ -52,6 +55,24 @@ class FakeRepo:
         self, issue_number: str, closed: bool = True
     ) -> None:
         self.closed.append(issue_number)
+
+    def add_issue_labels(self, issue_number: str, labels: List[str]) -> None:
+        self.labels_added.append((issue_number, labels))
+        rec = self.issues.get(int(issue_number))
+        if rec is not None:
+            rec["labels"] = list(rec.get("labels") or ()) + [
+                {"name": name} for name in labels
+            ]
+
+    def remove_issue_label(self, issue_number: str, label: str) -> None:
+        self.labels_removed.append((issue_number, label))
+        rec = self.issues.get(int(issue_number))
+        if rec is not None:
+            rec["labels"] = [
+                item
+                for item in rec.get("labels") or ()
+                if item["name"] != label
+            ]
 
 
 class FakeWebhook:
@@ -147,11 +168,96 @@ def test_unauthorized_pr_is_commented_and_closed():
     assert messages.MARKER_PREFIX in gh_repo.comments[0]
 
 
-def test_authorized_pr_is_left_alone():
+def test_authorized_pr_stays_open_and_claims_its_issue():
     gh_repo = FakeRepo({5: {"state": "open", "labels": [{"name": LABEL}]}})
     run(gh_repo, make_event(body="Fixes: #5"))
 
     assert gh_repo.closed == []
+    assert gh_repo.labels_added == [("5", [REVIEW_LABEL])]
+    assert gh_repo.labels_removed == [("5", LABEL)]
+
+    # one comment, on the pull request, carrying the claim
+    assert len(gh_repo.comments) == 1
+    assert messages.claim_marker(5) in gh_repo.comments[0]
+
+
+def test_review_label_is_added_before_the_other_is_removed():
+    """Failing between the two calls must leave the issue closed to new
+    pull requests, not open to all of them."""
+
+    gh_repo = FakeRepo({5: {"state": "open", "labels": [{"name": LABEL}]}})
+    order: List[str] = []
+    gh_repo.add_issue_labels = (  # type: ignore[method-assign]
+        lambda issue_number, labels: order.append("add")
+    )
+    gh_repo.remove_issue_label = (  # type: ignore[method-assign]
+        lambda issue_number, label: order.append("remove")
+    )
+
+    run(gh_repo, make_event(body="Fixes: #5"))
+
+    assert order == ["add", "remove"]
+
+
+def test_second_pr_on_a_claimed_issue_is_closed():
+    gh_repo = FakeRepo(
+        {5: {"state": "open", "labels": [{"name": REVIEW_LABEL}]}}
+    )
+    run(gh_repo, make_event(body="Fixes: #5", number=11))
+
+    assert gh_repo.closed == ["11"]
+    assert util.CLOSE_ISSUE_IN_REVIEW in gh_repo.comments[0]
+
+
+def test_claim_survives_close_and_reopen():
+    """The regression this whole claim mechanism exists for.
+
+    An accepted pull request strips "open for pull requests" from its
+    issue; when it is reopened the gate must not then close it for the
+    absence of the label it removed itself.
+
+    """
+
+    gh_repo = FakeRepo({5: {"state": "open", "labels": [{"name": LABEL}]}})
+
+    run(gh_repo, make_event(body="Fixes: #5"))
+    assert gh_repo.closed == []
+
+    # the issue now carries only the review label
+    names = {rec["name"] for rec in gh_repo.issues[5]["labels"]}
+    assert names == {REVIEW_LABEL}
+
+    run(gh_repo, make_event(action="reopened", body="Fixes: #5"))
+
+    assert gh_repo.closed == []
+    # no second claim comment, and no second label swap
+    assert len(gh_repo.comments) == 1
+    assert len(gh_repo.labels_added) == 1
+
+
+def test_a_different_pr_cannot_ride_the_first_ones_claim():
+    gh_repo = FakeRepo({5: {"state": "open", "labels": [{"name": LABEL}]}})
+    run(gh_repo, make_event(body="Fixes: #5", number=10))
+
+    # a second pull request has its own, empty, comment list
+    other_repo = FakeRepo(
+        {5: {"state": "open", "labels": [{"name": REVIEW_LABEL}]}}
+    )
+    run(other_repo, make_event(body="Fixes: #5", number=11))
+
+    assert other_repo.closed == ["11"]
+
+
+def test_maintainer_pr_does_not_claim_the_issue():
+    # exempt before we ever look at issues, so there's nothing to claim
+    gh_repo = FakeRepo(
+        {5: {"state": "open", "labels": [{"name": LABEL}]}},
+        permission="admin",
+    )
+    run(gh_repo, make_event(body="Fixes: #5"))
+
+    assert gh_repo.labels_added == []
+    assert gh_repo.labels_removed == []
     assert gh_repo.comments == []
 
 
