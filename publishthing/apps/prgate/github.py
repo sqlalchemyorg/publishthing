@@ -44,8 +44,8 @@ def github_hook(
 
     ``repos`` maps "owner/name" to a config dict; one wsgi app serves
     every project, so a repo absent from this mapping is ignored
-    entirely.  Recognized keys are "label", "review_label",
-    "exempt_maintainers" and "policy_url".
+    entirely.  Recognized keys are "label", "review_label", "deny_label",
+    "approved_label", "exempt_maintainers" and "policy_url".
 
     ``close_pull_requests=False`` leaves the comment but doesn't close,
     which is the way to defang the gate from configuration alone if the
@@ -66,6 +66,10 @@ def github_hook(
 
         label = entry.get("label", util.DEFAULT_LABEL)
         review_label = entry.get("review_label", util.DEFAULT_REVIEW_LABEL)
+        deny_label = entry.get("deny_label", util.DEFAULT_DENY_LABEL)
+        approved_label = entry.get(
+            "approved_label", util.DEFAULT_APPROVED_LABEL
+        )
         pull_request = event.json_data["pull_request"]
         number = str(event.json_data["number"])
         sender = event.json_data["sender"]["login"]
@@ -84,6 +88,14 @@ def github_hook(
             pull_request["body"],
             label=label,
             review_label=review_label,
+            deny_label=deny_label,
+            approved_label=approved_label,
+            # labels on the pull request itself.  an outside submitter
+            # can't apply these -- github requires triage permission or
+            # above -- which is what makes the override trustworthy.
+            pr_labels=[
+                rec["name"] for rec in pull_request.get("labels") or ()
+            ],
             exempt_maintainers=entry.get("exempt_maintainers", True),
             holds_claim=holds_claim,
         )
@@ -122,6 +134,7 @@ def github_hook(
             label,
             sha,
             review_label=review_label,
+            deny_label=deny_label,
             policy_url=entry.get("policy_url"),
         )
 

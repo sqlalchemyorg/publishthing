@@ -122,6 +122,7 @@ def make_event(
     body: str = "",
     sender: str = "someone",
     number: int = 7,
+    pr_labels: Optional[List[str]] = None,
 ) -> Any:
     from publishthing import github as gh
 
@@ -135,6 +136,7 @@ def make_event(
                 "title": "a change",
                 "body": body,
                 "head": {"sha": SHA},
+                "labels": [{"name": name} for name in pr_labels or ()],
             },
         },
         "pull_request",
@@ -347,3 +349,56 @@ def test_already_commented_matches_only_its_own_marker():
     assert not prgate_github._already_commented(
         gh_repo, "7", util.CLOSE_NO_ISSUE, SHA
     )
+
+
+APPROVED_LABEL = "approved for development"
+DENY_LABEL = "NO pull requests please"
+
+
+def test_approved_pr_is_left_open_and_claims_nothing():
+    """The escape hatch: a maintainer labels a closed pull request and
+    reopens it, and the gate waves it through."""
+
+    gh_repo = FakeRepo()
+    run(
+        gh_repo,
+        make_event(
+            action="reopened",
+            body="no reference at all",
+            pr_labels=[APPROVED_LABEL],
+        ),
+    )
+
+    assert gh_repo.closed == []
+    assert gh_repo.comments == []
+    assert gh_repo.labels_added == []
+
+
+def test_approved_pr_does_not_consult_the_issue():
+    gh_repo = FakeRepo({5: {"state": "open", "labels": [{"name": LABEL}]}})
+    run(
+        gh_repo,
+        make_event(body="Fixes: #5", pr_labels=[APPROVED_LABEL]),
+    )
+
+    # allowed as an override, so the issue is left exactly as it was
+    assert gh_repo.closed == []
+    assert gh_repo.labels_added == []
+    assert gh_repo.labels_removed == []
+
+
+def test_denied_issue_closes_the_pr():
+    gh_repo = FakeRepo(
+        {5: {"state": "open", "labels": [{"name": DENY_LABEL}]}}
+    )
+    run(gh_repo, make_event(body="Fixes: #5"))
+
+    assert gh_repo.closed == ["7"]
+
+    comment = gh_repo.comments[0]
+    assert util.CLOSE_ISSUE_DENIED in comment
+    assert DENY_LABEL in comment
+    # the generic message invites them to wait for the label to be
+    # added; on a denied issue that's exactly the wrong instruction
+    assert "Once a maintainer adds the label" not in comment
+    assert "Wait for a maintainer to add" not in comment

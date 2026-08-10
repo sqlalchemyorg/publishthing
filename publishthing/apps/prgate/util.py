@@ -1,5 +1,6 @@
 import re
 from typing import Callable
+from typing import Iterable
 from typing import List
 from typing import NamedTuple
 from typing import Optional
@@ -15,7 +16,20 @@ DEFAULT_LABEL = "open for pull requests"
 # happening purely in gerrit with no github pull request at all.
 DEFAULT_REVIEW_LABEL = "code review in progress"
 
+# put on an *issue* to say that no outside pull request is wanted for it
+# at all, whatever else the issue is labeled.
+DEFAULT_DENY_LABEL = "NO pull requests please"
+
+# put on a *pull request* by a maintainer to wave it through regardless
+# of anything else.  the escape hatch for the case the rules don't fit:
+# a doc fix worth taking, a contributor worth making an exception for.
+# note this can't pre-empt the first close, since the label can't exist
+# before the pull request does; the flow is that the gate closes it, a
+# maintainer labels it, and reopening it then passes.
+DEFAULT_APPROVED_LABEL = "approved for development"
+
 # reasons a pull request was allowed through
+ALLOW_APPROVED = "approved"
 ALLOW_MAINTAINER = "maintainer"
 ALLOW_QUALIFIED_ISSUE = "qualified_issue"
 ALLOW_EXISTING_CLAIM = "existing_claim"
@@ -28,12 +42,14 @@ CLOSE_NO_ISSUE = "no_issue"
 CLOSE_ISSUE_CLOSED = "issue_closed"
 CLOSE_ISSUE_UNLABELED = "issue_unlabeled"
 CLOSE_ISSUE_IN_REVIEW = "issue_in_review"
+CLOSE_ISSUE_DENIED = "issue_denied"
 
 _CLOSE_SPECIFICITY = {
     CLOSE_NO_ISSUE: 0,
     CLOSE_ISSUE_CLOSED: 1,
     CLOSE_ISSUE_UNLABELED: 2,
     CLOSE_ISSUE_IN_REVIEW: 3,
+    CLOSE_ISSUE_DENIED: 4,
 }
 
 _FENCED_CODE = re.compile(r"^(```|~~~).*?^\1", re.S | re.M)
@@ -158,6 +174,9 @@ def evaluate_pr(
     body: Optional[str],
     label: str = DEFAULT_LABEL,
     review_label: str = DEFAULT_REVIEW_LABEL,
+    deny_label: str = DEFAULT_DENY_LABEL,
+    approved_label: str = DEFAULT_APPROVED_LABEL,
+    pr_labels: Optional[Iterable[str]] = None,
     exempt_maintainers: bool = True,
     holds_claim: Optional[Callable[[int], bool]] = None,
 ) -> GateResult:
@@ -175,7 +194,18 @@ def evaluate_pr(
     survive being closed and reopened, since by then the labels on its
     issue have already been swapped.
 
+    An issue carrying ``deny_label`` wants no outside pull request at
+    all, and one reference to such an issue closes the pull request
+    whatever else it references.
+
+    ``pr_labels`` are the labels on the pull request itself.
+    ``approved_label`` among them is a maintainer's manual override and
+    beats every other consideration here.
+
     """
+
+    if approved_label.lower() in {name.lower() for name in pr_labels or ()}:
+        return GateResult("allow", ALLOW_APPROVED, None)
 
     if exempt_maintainers and user_has_write_permission(gh_repo, sender):
         return GateResult("allow", ALLOW_MAINTAINER, None)
@@ -186,6 +216,7 @@ def evaluate_pr(
 
     label_key = label.lower()
     review_label_key = review_label.lower()
+    deny_label_key = deny_label.lower()
     best: Optional[GateResult] = None
 
     for number in references:
@@ -203,6 +234,12 @@ def evaluate_pr(
             continue
 
         names = {rec["name"].lower() for rec in issue.get("labels") or ()}
+
+        if deny_label_key in names:
+            # a deliberate "we are doing this one ourselves".  don't let
+            # another reference in the same pull request talk us out of
+            # it, and don't tell the contributor to go ask for the label.
+            return GateResult("close", CLOSE_ISSUE_DENIED, number)
 
         if label_key in names:
             return GateResult("allow", ALLOW_QUALIFIED_ISSUE, number)

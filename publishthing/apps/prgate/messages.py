@@ -83,6 +83,14 @@ _STEPS_IN_REVIEW = (
     "review, the place to make that case is on #%(issue)s."
 )
 
+_STEPS_DENIED = (
+    "This pull request references issue #%(issue)s, which is marked "
+    "**%(deny_label)s** -- that one is being handled by the maintainers "
+    "directly, so it isn't open to outside pull requests and asking for "
+    "it to be opened up won't change that. If you'd like to contribute "
+    "something else, look for an issue marked **%(label)s**."
+)
+
 _NOT_A_JUDGMENT = (
     "This is automatic and procedural. It isn't a judgment on your "
     "change, and nothing you've written here is lost."
@@ -126,6 +134,7 @@ def close_message(
     label: str,
     sha: str,
     review_label: str = util.DEFAULT_REVIEW_LABEL,
+    deny_label: str = util.DEFAULT_DENY_LABEL,
     policy_url: Optional[str] = None,
 ) -> str:
     """Assemble the comment for a pull request being closed."""
@@ -133,6 +142,7 @@ def close_message(
     subs = {
         "label": label,
         "review_label": review_label,
+        "deny_label": deny_label,
         "issue": result.issue,
         # deliberately not a number: text copied out of this comment
         # into a pull request body must not read as a real reference to
@@ -146,6 +156,8 @@ def close_message(
         steps = _STEPS_CLOSED
     elif result.reason == util.CLOSE_ISSUE_IN_REVIEW:
         steps = _STEPS_IN_REVIEW
+    elif result.reason == util.CLOSE_ISSUE_DENIED:
+        steps = _STEPS_DENIED
     else:
         steps = _STEPS_NO_ISSUE
 

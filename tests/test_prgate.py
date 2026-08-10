@@ -333,3 +333,80 @@ def test_review_label_is_configurable():
         repo, REPO, "someone", "fix", "#5", LABEL, review_label="under review"
     )
     assert result == util.GateResult("close", util.CLOSE_ISSUE_IN_REVIEW, 5)
+
+
+DENY_LABEL = "NO pull requests please"
+APPROVED_LABEL = "approved for development"
+
+
+def test_denied_issue_closes_with_its_own_reason():
+    repo = FakeRepo({5: issue(labels=[DENY_LABEL])})
+    result = util.evaluate_pr(repo, REPO, "someone", "fix", "#5", LABEL)
+    assert result == util.GateResult("close", util.CLOSE_ISSUE_DENIED, 5)
+
+
+def test_deny_beats_a_qualifying_issue_in_the_same_pr():
+    # referencing a denied issue at all closes the pull request; another
+    # reference must not talk us out of a deliberate "we're doing this
+    # one ourselves"
+    repo = FakeRepo({1: issue(labels=[DENY_LABEL]), 2: issue(labels=[LABEL])})
+    result = util.evaluate_pr(repo, REPO, "someone", "fix", "#1 #2", LABEL)
+    assert result == util.GateResult("close", util.CLOSE_ISSUE_DENIED, 1)
+
+
+def test_deny_beats_open_for_prs_on_the_same_issue():
+    repo = FakeRepo({5: issue(labels=[LABEL, DENY_LABEL])})
+    result = util.evaluate_pr(repo, REPO, "someone", "fix", "#5", LABEL)
+    assert result == util.GateResult("close", util.CLOSE_ISSUE_DENIED, 5)
+
+
+def test_approved_label_on_the_pr_overrides_everything():
+    repo = FakeRepo({5: issue(labels=[DENY_LABEL])})
+    result = util.evaluate_pr(
+        repo,
+        REPO,
+        "someone",
+        "fix",
+        "#5",
+        LABEL,
+        pr_labels=[APPROVED_LABEL],
+    )
+    assert result == util.GateResult("allow", util.ALLOW_APPROVED, None)
+    # allowed without even looking at the issue
+    assert repo.requested == []
+
+
+def test_approved_label_allows_a_pr_with_no_issue_at_all():
+    repo = FakeRepo()
+    result = util.evaluate_pr(
+        repo,
+        REPO,
+        "someone",
+        "a doc typo",
+        "",
+        LABEL,
+        pr_labels=[APPROVED_LABEL],
+    )
+    assert result.action == "allow"
+
+
+def test_approved_label_match_is_case_insensitive():
+    repo = FakeRepo()
+    result = util.evaluate_pr(
+        repo,
+        REPO,
+        "someone",
+        "fix",
+        "",
+        LABEL,
+        pr_labels=["Approved For Development"],
+    )
+    assert result.action == "allow"
+
+
+def test_other_pr_labels_do_not_override():
+    repo = FakeRepo()
+    result = util.evaluate_pr(
+        repo, REPO, "someone", "fix", "", LABEL, pr_labels=["bug", "typing"]
+    )
+    assert result == util.GateResult("close", util.CLOSE_NO_ISSUE, None)

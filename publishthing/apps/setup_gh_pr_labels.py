@@ -42,6 +42,18 @@ LABELS = [
         "4B98F5",
         "code has been provided that's in review as PR and/or gerrit",
     ),
+    LabelSpec(
+        util.DEFAULT_DENY_LABEL,
+        "ca2720",
+        "Please do not submit pull requests for this issue.  "
+        "We are doing it internally",
+    ),
+    LabelSpec(
+        util.DEFAULT_APPROVED_LABEL,
+        "5319e7",
+        "Maintainer override: this pull request may proceed regardless "
+        "of the labels on any issue",
+    ),
 ]
 
 
