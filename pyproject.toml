@@ -24,6 +24,7 @@ dependencies = [
 ]
 
 [project.scripts]
+publish_gh_pr_labels = "publishthing.apps.setup_gh_pr_labels:main"
 publish_gh_relnotes = "publishthing.apps.publish_gh_relnotes:main"
 publishthing = "publishthing.apps.generate_site:main"
 sync_github_issues = "publishthing.apps.sync_gh_issues:main"

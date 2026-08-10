@@ -154,6 +154,50 @@ class GithubRepo:
         else:
             return resp.json()
 
+    def get_issue(self, issue_number: str) -> Optional[GithubJsonRec]:
+        """Return the issue record, or None if there's no such number.
+
+        Note that github's issue endpoint also serves pull requests; a
+        record that has a "pull_request" key is a pull request, not an
+        issue.
+
+        """
+
+        url = "https://api.github.com/repos/%s/issues/%s" % (
+            self.repo,
+            issue_number,
+        )
+
+        resp = self._api_get(url, return_none_for_404=True)
+        if resp is None:
+            return None
+        else:
+            return resp.json()
+
+    def get_issue_comments(self, issue_number: str) -> Iterator[GithubJsonRec]:
+        url = (
+            "https://api.github.com/repos/%s/issues/%s/comments"
+            "?direction=asc&per_page=100" % (self.repo, issue_number)
+        )
+        return self._yield_with_links(url)
+
+    def get_labels(self) -> Iterator[GithubJsonRec]:
+        url = "https://api.github.com/repos/%s/labels?per_page=100" % (
+            self.repo,
+        )
+        return self._yield_with_links(url)
+
+    def create_label(self, name: str, color: str, description: str) -> None:
+        url = "https://api.github.com/repos/%s/labels" % (self.repo,)
+        self._api_post(
+            url,
+            rec={
+                "name": name,
+                "color": color,
+                "description": description,
+            },
+        )
+
     def get_git_tags(self) -> Iterator[GithubJsonRec]:
         url = (
             "https://api.github.com/repos/%s/git/refs/tags"
