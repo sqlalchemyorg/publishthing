@@ -211,11 +211,20 @@ def gerrit_hook(thing: publishthing.PublishThing) -> None:
 
         for gerrit_file_comment in lead_gerrit_comment["line_comments"]:
             path = gerrit_file_comment["path"]
-            line_number = gerrit_file_comment["line"]
+
+            # a comment on a file as a whole has no line number; github has
+            # no equivalent, so it goes out with the external comments below.
+            line_number = gerrit_file_comment.get("line")
             is_parent = gerrit_file_comment.get("side", None) == "PARENT"
-            github_position = pullreq.convert_gerrit_line_number(
-                util.GerritReviewLine(path, line_number, is_parent)
+            comment_fullname, comment_username = util.gerrit_author_names(
+                gerrit_file_comment.get("author")
             )
+            if line_number is None:
+                github_position = None
+            else:
+                github_position = pullreq.convert_gerrit_line_number(
+                    util.GerritReviewLine(path, line_number, is_parent)
+                )
 
             if github_position is not None:
                 if gerrit_file_comment.get("in_reply_to", None):
@@ -229,8 +238,8 @@ def gerrit_hook(thing: publishthing.PublishThing) -> None:
                                 "in_reply_to": github_parent_comment["id"],
                                 "body": util.format_gerrit_comment_for_github(
                                     opts.change_url,
-                                    gerrit_file_comment["author"]["name"],
-                                    gerrit_file_comment["author"]["username"],
+                                    comment_fullname,
+                                    comment_username,
                                     gerrit_file_comment.get(
                                         "message", "(no message)"
                                     ),
@@ -245,8 +254,8 @@ def gerrit_hook(thing: publishthing.PublishThing) -> None:
                         "position": github_position.position,
                         "body": util.format_gerrit_comment_for_github(
                             opts.change_url,
-                            gerrit_file_comment["author"]["name"],
-                            gerrit_file_comment["author"]["username"],
+                            comment_fullname,
+                            comment_username,
                             gerrit_file_comment.get("message", "(no message)"),
                         ),
                     }
@@ -255,25 +264,48 @@ def gerrit_hook(thing: publishthing.PublishThing) -> None:
                 # gerrit lets you comment on any line in the whole
                 # file, as well as on COMMIT_MSG, which aren't
                 # available in github.  add these lines separately
+                # keep the message as its own block rather than inlining it
+                # after a bullet; these messages are frequently multi-line
+                # and contain indented code, which a markdown list mangles.
+                if line_number is None:
+                    location = "**%s**:" % (path,)
+                else:
+                    location = "**%s** (line %s):" % (path, line_number)
+
                 outgoing_external_line_comments.append(
-                    "* %s (line %s): %s"
+                    "%s\n\n%s"
                     % (
-                        path,
-                        line_number,
+                        location,
                         gerrit_file_comment.get("message", "(no message)"),
                     )
                 )
 
+        # a review left in the gerrit web UI puts its cover message in a
+        # /PATCHSET_LEVEL comment, which is what gives us "message" here.
+        # a review posted over ssh with "gerrit review --json" instead puts
+        # it in the change message only, so fall back to that.
+        lead_message = lead_gerrit_comment.get("message")
+        if not lead_message:
+            lead_message = util.strip_gerrit_message_preamble(
+                lead_gerrit_comment.get("command_line_message", "")
+            )
+        if not lead_message:
+            lead_message = "code review left on gerrit"
+
+        lead_fullname, lead_username = util.gerrit_author_names(
+            lead_gerrit_comment.get("author")
+        )
+
         github_comment_body = util.format_gerrit_comment_for_github(
             opts.change_url,
-            lead_gerrit_comment["author"]["name"],
-            lead_gerrit_comment["author"]["username"],
-            lead_gerrit_comment.get("message", "code review left on gerrit"),
+            lead_fullname,
+            lead_username,
+            lead_message,
         )
 
         if outgoing_inline_comments or outgoing_external_line_comments:
             if outgoing_external_line_comments:
-                github_comment_body += "\n\n" + "\n".join(
+                github_comment_body += "\n\n" + "\n\n".join(
                     outgoing_external_line_comments
                 )
 
