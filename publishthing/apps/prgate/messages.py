@@ -17,7 +17,11 @@ from typing import Optional
 from . import util
 
 # hidden marker so the gate can recognize its own previous comment on a
-# pull request and not repeat itself if github redelivers a webhook.
+# pull request and not repeat itself if github redelivers a webhook or
+# the pull request is closed and reopened.  keyed on the reason alone:
+# the gate's decision is a function of the pull request's description and
+# the issue it names, never of the code, so a new head commit can't
+# change the outcome without also changing the reason.
 MARKER_PREFIX = "<!-- prgate"
 
 # hidden marker recording that this pull request is the one that claimed
@@ -27,8 +31,20 @@ MARKER_PREFIX = "<!-- prgate"
 CLAIM_MARKER_PREFIX = "<!-- prgate-claim"
 
 
-def marker(reason: str, sha: str) -> str:
-    return "%s:%s:%s -->" % (MARKER_PREFIX, reason, sha)
+def marker(reason: str) -> str:
+    return "%s:%s -->" % (MARKER_PREFIX, reason)
+
+
+def marker_match(reason: str) -> str:
+    """The substring that recognizes any past comment for ``reason``.
+
+    Deliberately unterminated: the marker used to carry the head sha as
+    well, and matching on the open prefix means the comments already
+    posted with the old format are still recognized.
+
+    """
+
+    return "%s:%s" % (MARKER_PREFIX, reason)
 
 
 def claim_marker(issue: int) -> str:
@@ -132,7 +148,6 @@ def accepted_message(issue: int, label: str, review_label: str) -> str:
 def close_message(
     result: util.GateResult,
     label: str,
-    sha: str,
     review_label: str = util.DEFAULT_REVIEW_LABEL,
     deny_label: str = util.DEFAULT_DENY_LABEL,
     policy_url: Optional[str] = None,
@@ -162,7 +177,7 @@ def close_message(
         steps = _STEPS_NO_ISSUE
 
     paragraphs = [
-        marker(result.reason, sha),
+        marker(result.reason),
         _INTRO,
         _POLICY % subs,
         (steps % subs).strip(),
