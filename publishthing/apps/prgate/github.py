@@ -73,7 +73,6 @@ def github_hook(
         pull_request = event.json_data["pull_request"]
         number = str(event.json_data["number"])
         sender = event.json_data["sender"]["login"]
-        sha = pull_request["head"]["sha"]
 
         gh_repo = thing.github_repo(event.repo_name)
 
@@ -132,23 +131,22 @@ def github_hook(
         message = messages.close_message(
             result,
             label,
-            sha,
             review_label=review_label,
             deny_label=deny_label,
             policy_url=entry.get("policy_url"),
         )
 
         # github redelivers webhooks, and a reopen re-runs the gate; only
-        # skip the comment when we've already said this exact thing about
-        # this exact commit.  the close below still runs either way, and
+        # skip the comment when we've already said this exact thing on
+        # this pull request.  the close below still runs either way, and
         # closing an already-closed pull request is a no-op.
-        if _already_commented(gh_repo, number, result.reason, sha):
+        if _already_commented(gh_repo, number, result.reason):
             thing.debug(
                 "prgate",
-                "already commented on %s #%s for sha %s, not repeating",
+                "already commented on %s #%s for %s, not repeating",
                 event.repo_name,
                 number,
-                sha,
+                result.reason,
             )
         else:
             # comment before closing: if the close fails we'd rather have
@@ -162,9 +160,9 @@ def github_hook(
 
 
 def _already_commented(
-    gh_repo: github.GithubRepo, number: str, reason: str, sha: str
+    gh_repo: github.GithubRepo, number: str, reason: str
 ) -> bool:
-    marker = messages.marker(reason, sha)
+    marker = messages.marker_match(reason)
     for comment in gh_repo.get_issue_comments(number):
         if marker in (comment.get("body") or ""):
             return True

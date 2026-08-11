@@ -304,13 +304,27 @@ def test_redelivery_does_not_repeat_the_comment():
     assert gh_repo.closed == ["7", "7"]
 
 
-def test_new_commit_gets_a_fresh_comment():
+def test_new_commit_does_not_get_a_fresh_comment():
+    """A reopen after a push is the same rejection, not a new one.
+
+    The marker used to carry the head sha, so pushing a commit and
+    reopening produced a second identical comment.
+
+    """
+
+    gh_repo = FakeRepo(comments=[messages.marker(util.CLOSE_NO_ISSUE)])
+    run(gh_repo, make_event(body="no reference"))
+
+    assert len(gh_repo.comments) == 1
+
+
+def test_comments_from_the_old_sha_bearing_marker_are_recognized():
     gh_repo = FakeRepo(
-        comments=[messages.marker(util.CLOSE_NO_ISSUE, "different-sha")]
+        comments=["<!-- prgate:%s:some-sha -->" % util.CLOSE_NO_ISSUE]
     )
     run(gh_repo, make_event(body="no reference"))
 
-    assert len(gh_repo.comments) == 2
+    assert len(gh_repo.comments) == 1
 
 
 def test_close_can_be_disabled():
@@ -335,19 +349,21 @@ def test_maintainer_exemption_is_per_repo():
     assert gh_repo.closed == ["7"]
 
 
-def test_marker_distinguishes_reason_and_sha():
-    assert messages.marker("no_issue", "aaa") != messages.marker(
-        "no_issue", "bbb"
-    )
-    assert messages.marker("no_issue", "aaa") != messages.marker(
-        "issue_closed", "aaa"
-    )
+def test_marker_distinguishes_reason():
+    assert messages.marker("no_issue") != messages.marker("issue_closed")
 
 
 def test_already_commented_matches_only_its_own_marker():
     gh_repo = FakeRepo(comments=["a normal human comment mentioning #5"])
     assert not prgate_github._already_commented(
-        gh_repo, "7", util.CLOSE_NO_ISSUE, SHA
+        gh_repo, "7", util.CLOSE_NO_ISSUE
+    )
+
+
+def test_already_commented_does_not_match_a_different_reason():
+    gh_repo = FakeRepo(comments=[messages.marker(util.CLOSE_ISSUE_CLOSED)])
+    assert not prgate_github._already_commented(
+        gh_repo, "7", util.CLOSE_NO_ISSUE
     )
 
 
