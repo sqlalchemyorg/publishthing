@@ -31,6 +31,7 @@ DEFAULT_APPROVED_LABEL = "approved for development"
 # reasons a pull request was allowed through
 ALLOW_APPROVED = "approved"
 ALLOW_MAINTAINER = "maintainer"
+ALLOW_EXEMPT_USER = "exempt_user"
 ALLOW_QUALIFIED_ISSUE = "qualified_issue"
 ALLOW_EXISTING_CLAIM = "existing_claim"
 
@@ -178,6 +179,7 @@ def evaluate_pr(
     approved_label: str = DEFAULT_APPROVED_LABEL,
     pr_labels: Optional[Iterable[str]] = None,
     exempt_maintainers: bool = True,
+    exempt_users: Optional[Iterable[str]] = None,
     holds_claim: Optional[Callable[[int], bool]] = None,
 ) -> GateResult:
     """Decide whether a pull request is authorized.
@@ -202,10 +204,19 @@ def evaluate_pr(
     ``approved_label`` among them is a maintainer's manual override and
     beats every other consideration here.
 
+    ``exempt_users`` are logins waved through unconditionally, such as
+    "dependabot[bot]".  A github app doesn't show up as a collaborator,
+    so the maintainer exemption doesn't cover it even when the app was
+    installed by a maintainer.  Matching is case-insensitive, as github
+    logins are.
+
     """
 
     if approved_label.lower() in {name.lower() for name in pr_labels or ()}:
         return GateResult("allow", ALLOW_APPROVED, None)
+
+    if sender.lower() in {name.lower() for name in exempt_users or ()}:
+        return GateResult("allow", ALLOW_EXEMPT_USER, None)
 
     if exempt_maintainers and user_has_write_permission(gh_repo, sender):
         return GateResult("allow", ALLOW_MAINTAINER, None)

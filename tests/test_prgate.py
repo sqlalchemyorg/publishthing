@@ -181,6 +181,65 @@ def test_exemption_can_be_disabled():
     assert result == util.GateResult("close", util.CLOSE_NO_ISSUE, None)
 
 
+def test_exempt_user_is_allowed():
+    repo = FakeRepo()
+    result = util.evaluate_pr(
+        repo,
+        REPO,
+        "dependabot[bot]",
+        "Bump some-package from 1.0 to 1.1",
+        "",
+        label=LABEL,
+        exempt_users=["dependabot[bot]"],
+    )
+    assert result == util.GateResult("allow", util.ALLOW_EXEMPT_USER, None)
+    # exempt without ever looking at issues
+    assert repo.requested == []
+
+
+def test_exempt_user_match_is_case_insensitive():
+    repo = FakeRepo()
+    result = util.evaluate_pr(
+        repo,
+        REPO,
+        "Dependabot[bot]",
+        "fix",
+        "",
+        label=LABEL,
+        exempt_users=["dependabot[bot]"],
+    )
+    assert result.action == "allow"
+
+
+def test_exempt_users_does_not_cover_other_users():
+    repo = FakeRepo()
+    result = util.evaluate_pr(
+        repo,
+        REPO,
+        "someone",
+        "fix",
+        "",
+        label=LABEL,
+        exempt_users=["dependabot[bot]"],
+    )
+    assert result == util.GateResult("close", util.CLOSE_NO_ISSUE, None)
+
+
+def test_exempt_user_holds_with_maintainer_exemption_disabled():
+    repo = FakeRepo()
+    result = util.evaluate_pr(
+        repo,
+        REPO,
+        "dependabot[bot]",
+        "fix",
+        "",
+        label=LABEL,
+        exempt_maintainers=False,
+        exempt_users=["dependabot[bot]"],
+    )
+    assert result.action == "allow"
+
+
 def test_no_issue_reference_closes():
     repo = FakeRepo()
     result = util.evaluate_pr(

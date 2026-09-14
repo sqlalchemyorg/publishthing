@@ -335,6 +335,29 @@ def test_maintainer_exemption_is_per_repo():
     assert gh_repo.closed == ["7"]
 
 
+def test_exempt_user_pr_is_left_alone():
+    gh_repo = FakeRepo()
+    run(
+        gh_repo,
+        make_event(sender="dependabot[bot]", body="no reference"),
+        repos={REPO: {"label": LABEL, "exempt_users": ["dependabot[bot]"]}},
+    )
+
+    assert gh_repo.closed == []
+    assert gh_repo.comments == []
+    assert gh_repo.labels_added == []
+
+
+def test_exempt_users_are_per_repo():
+    gh_repo = FakeRepo()
+    run(
+        gh_repo,
+        make_event(sender="dependabot[bot]", body="no reference"),
+    )
+
+    assert gh_repo.closed == ["7"]
+
+
 def test_marker_distinguishes_reason_and_sha():
     assert messages.marker("no_issue", "aaa") != messages.marker(
         "no_issue", "bbb"

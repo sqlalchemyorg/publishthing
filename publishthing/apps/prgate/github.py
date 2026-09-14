@@ -45,7 +45,8 @@ def github_hook(
     ``repos`` maps "owner/name" to a config dict; one wsgi app serves
     every project, so a repo absent from this mapping is ignored
     entirely.  Recognized keys are "label", "review_label", "deny_label",
-    "approved_label", "exempt_maintainers" and "policy_url".
+    "approved_label", "exempt_maintainers", "exempt_users" and
+    "policy_url".
 
     ``close_pull_requests=False`` leaves the comment but doesn't close,
     which is the way to defang the gate from configuration alone if the
@@ -97,6 +98,7 @@ def github_hook(
                 rec["name"] for rec in pull_request.get("labels") or ()
             ],
             exempt_maintainers=entry.get("exempt_maintainers", True),
+            exempt_users=entry.get("exempt_users", ()),
             holds_claim=holds_claim,
         )
 
