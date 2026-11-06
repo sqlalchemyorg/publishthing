@@ -170,7 +170,7 @@ def user_has_write_permission(
 def evaluate_pr(
     gh_repo: github.GithubRepo,
     repo: str,
-    sender: str,
+    author: str,
     title: Optional[str],
     body: Optional[str],
     label: str = DEFAULT_LABEL,
@@ -215,10 +215,10 @@ def evaluate_pr(
     if approved_label.lower() in {name.lower() for name in pr_labels or ()}:
         return GateResult("allow", ALLOW_APPROVED, None)
 
-    if sender.lower() in {name.lower() for name in exempt_users or ()}:
+    if author.lower() in {name.lower() for name in exempt_users or ()}:
         return GateResult("allow", ALLOW_EXEMPT_USER, None)
 
-    if exempt_maintainers and user_has_write_permission(gh_repo, sender):
+    if exempt_maintainers and user_has_write_permission(gh_repo, author):
         return GateResult("allow", ALLOW_MAINTAINER, None)
 
     references = find_issue_references(title, body, repo)

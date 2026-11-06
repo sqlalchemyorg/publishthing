@@ -73,7 +73,12 @@ def github_hook(
         )
         pull_request = event.json_data["pull_request"]
         number = str(event.json_data["number"])
-        sender = event.json_data["sender"]["login"]
+        # the pull request's author, not the event's sender.  on a reopen
+        # the sender is whoever pressed the button, often a maintainer,
+        # and gating on that would let any pull request a maintainer
+        # reopens through on the maintainer exemption without ever
+        # claiming its issue.
+        author = pull_request["user"]["login"]
         sha = pull_request["head"]["sha"]
 
         gh_repo = thing.github_repo(event.repo_name)
@@ -84,7 +89,7 @@ def github_hook(
         result = util.evaluate_pr(
             gh_repo,
             event.repo_name,
-            sender,
+            author,
             pull_request["title"],
             pull_request["body"],
             label=label,
@@ -107,7 +112,7 @@ def github_hook(
             "%s #%s from %s: %s (%s)",
             event.repo_name,
             number,
-            sender,
+            author,
             result.action,
             result.reason,
         )

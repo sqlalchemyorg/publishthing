@@ -29,18 +29,21 @@ class FakeRepo:
         issues: Optional[Dict[int, Dict[str, Any]]] = None,
         permission: Optional[str] = None,
         comments: Optional[List[str]] = None,
+        user_permissions: Optional[Dict[str, str]] = None,
     ) -> None:
         self.issues = issues or {}
         self.permission = permission
+        self.user_permissions = user_permissions or {}
         self.comments = list(comments or ())
         self.closed: List[str] = []
         self.labels_added: List[Any] = []
         self.labels_removed: List[Any] = []
 
     def get_user_permission(self, username: str) -> Optional[Dict[str, Any]]:
-        if self.permission is None:
+        permission = self.user_permissions.get(username, self.permission)
+        if permission is None:
             return None
-        return {"permission": self.permission}
+        return {"permission": permission}
 
     def get_issue(self, issue_number: str) -> Optional[Dict[str, Any]]:
         return self.issues.get(int(issue_number))
@@ -123,6 +126,7 @@ def make_event(
     sender: str = "someone",
     number: int = 7,
     pr_labels: Optional[List[str]] = None,
+    author: Optional[str] = None,
 ) -> Any:
     from publishthing import github as gh
 
@@ -136,6 +140,9 @@ def make_event(
                 "title": "a change",
                 "body": body,
                 "head": {"sha": SHA},
+                # on "opened" the sender is the author; on "reopened" it
+                # is whoever reopened it
+                "user": {"login": author if author is not None else sender},
                 "labels": [{"name": name} for name in pr_labels or ()],
             },
         },
@@ -235,6 +242,48 @@ def test_claim_survives_close_and_reopen():
     # no second claim comment, and no second label swap
     assert len(gh_repo.comments) == 1
     assert len(gh_repo.labels_added) == 1
+
+
+def test_maintainer_reopen_still_claims_the_issue():
+    """A maintainer reopening an outside contributor's pull request is
+    the event's sender, but the gate must judge the pull request's
+    author.  Otherwise the maintainer exemption waves it through and its
+    issue is never claimed."""
+
+    gh_repo = FakeRepo(
+        {5: {"state": "open", "labels": [{"name": LABEL}]}},
+        user_permissions={"maintainer": "admin"},
+    )
+    run(
+        gh_repo,
+        make_event(
+            action="reopened",
+            body="Fixes: #5",
+            sender="maintainer",
+            author="contributor",
+        ),
+    )
+
+    assert gh_repo.closed == []
+    assert gh_repo.labels_added == [("5", [REVIEW_LABEL])]
+    assert gh_repo.labels_removed == [("5", LABEL)]
+
+
+def test_maintainer_reopen_of_unauthorized_pr_closes_it_again():
+    """Reopening alone isn't an override; the approved label is."""
+
+    gh_repo = FakeRepo(user_permissions={"maintainer": "admin"})
+    run(
+        gh_repo,
+        make_event(
+            action="reopened",
+            body="no reference",
+            sender="maintainer",
+            author="contributor",
+        ),
+    )
+
+    assert gh_repo.closed == ["7"]
 
 
 def test_a_different_pr_cannot_ride_the_first_ones_claim():
