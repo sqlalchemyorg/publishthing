@@ -21,6 +21,7 @@ REPO = "sqlalchemy/testgerrit"
 LABEL = "open for pull requests"
 REVIEW_LABEL = "code review in progress"
 SHA = "abc123"
+APPROVED_LABEL = "approved for development"
 
 
 class FakeRepo:
@@ -269,21 +270,149 @@ def test_maintainer_reopen_still_claims_the_issue():
     assert gh_repo.labels_removed == [("5", LABEL)]
 
 
-def test_maintainer_reopen_of_unauthorized_pr_closes_it_again():
-    """Reopening alone isn't an override; the approved label is."""
+def maintainer_reopen(body: str = "no reference", **kw: Any) -> Any:
+    return make_event(
+        action="reopened",
+        body=body,
+        sender="maintainer",
+        author="contributor",
+        **kw,
+    )
+
+
+def test_maintainer_reopen_of_unauthorized_pr_approves_it():
+    """sqlalchemy/sqlalchemy#13774: a maintainer reopening a closed pull
+    request with no issue was closed straight back, with no comment."""
 
     gh_repo = FakeRepo(user_permissions={"maintainer": "admin"})
+
+    # the contributor opens it and the gate closes it
+    run(gh_repo, make_event(body="no reference", sender="contributor"))
+    assert gh_repo.closed == ["7"]
+    assert len(gh_repo.comments) == 1
+
+    # the maintainer reopens it, same commit
+    request = run(gh_repo, maintainer_reopen())
+
+    assert gh_repo.closed == ["7"]
+    assert gh_repo.labels_added == [("7", [APPROVED_LABEL])]
+    assert len(gh_repo.comments) == 2
+    comment = gh_repo.comments[1]
+    assert "@maintainer" in comment
+    assert APPROVED_LABEL in comment
+    assert any("approved #7" in line for line in request.text)
+
+
+def test_maintainer_reopen_approval_is_not_repeated_on_redelivery():
+    gh_repo = FakeRepo(user_permissions={"maintainer": "admin"})
+    event = maintainer_reopen()
+
+    run(gh_repo, event)
+    run(gh_repo, event)
+
+    assert gh_repo.closed == []
+    assert len(gh_repo.comments) == 1
+
+
+def test_maintainer_reopen_claims_an_unlabeled_issue():
+    gh_repo = FakeRepo(
+        {5: {"state": "open", "labels": []}},
+        user_permissions={"maintainer": "admin"},
+    )
+    run(gh_repo, maintainer_reopen(body="Fixes: #5"))
+
+    assert gh_repo.closed == []
+    assert gh_repo.labels_added == [("5", [REVIEW_LABEL])]
+    assert len(gh_repo.comments) == 1
+    comment = gh_repo.comments[0]
+    assert messages.claim_marker(5) in comment
+    assert "@maintainer" in comment
+
+    # the claim is recorded, so the author can close and reopen freely
+    run(
+        gh_repo,
+        make_event(action="reopened", body="Fixes: #5", sender="contributor"),
+    )
+    assert gh_repo.closed == []
+    assert len(gh_repo.comments) == 1
+
+
+@pytest.mark.parametrize(
+    "issue_rec, expected",
+    [
+        ({"state": "closed", "labels": []}, "closed"),
+        ({"state": "open", "labels": [{"name": REVIEW_LABEL}]}, REVIEW_LABEL),
+        (
+            {"state": "open", "labels": [{"name": "NO pull requests please"}]},
+            "NO pull requests please",
+        ),
+    ],
+)
+def test_maintainer_reopen_leaves_other_issues_alone(issue_rec, expected):
+    gh_repo = FakeRepo(
+        {5: issue_rec}, user_permissions={"maintainer": "admin"}
+    )
+    run(gh_repo, maintainer_reopen(body="Fixes: #5"))
+
+    assert gh_repo.closed == []
+    # the label goes on the pull request, not the issue
+    assert gh_repo.labels_added == [("7", [APPROVED_LABEL])]
+    assert gh_repo.labels_removed == []
+    assert expected in gh_repo.comments[0]
+
+
+def test_maintainer_reopening_own_pr_is_not_an_override():
+    gh_repo = FakeRepo(permission="admin")
     run(
         gh_repo,
         make_event(
-            action="reopened",
-            body="no reference",
-            sender="maintainer",
-            author="contributor",
+            action="reopened", body="no reference", sender="maintainer"
         ),
+        repos={REPO: {"label": LABEL, "exempt_maintainers": False}},
     )
 
     assert gh_repo.closed == ["7"]
+    assert gh_repo.labels_added == []
+
+
+def test_reopen_by_non_maintainer_is_not_an_override():
+    gh_repo = FakeRepo(user_permissions={"maintainer": "read"})
+    run(gh_repo, maintainer_reopen())
+
+    assert gh_repo.closed == ["7"]
+    assert gh_repo.labels_added == []
+
+
+def test_maintainer_reopen_override_can_be_disabled():
+    gh_repo = FakeRepo(user_permissions={"maintainer": "admin"})
+    run(
+        gh_repo,
+        maintainer_reopen(),
+        repos={REPO: {"label": LABEL, "approve_on_maintainer_reopen": False}},
+    )
+
+    assert gh_repo.closed == ["7"]
+    assert gh_repo.labels_added == []
+
+
+def test_author_reopen_with_nothing_changed_says_so():
+    gh_repo = FakeRepo()
+    run(gh_repo, make_event(body="no reference"))
+    assert len(gh_repo.comments) == 1
+
+    reopen = make_event(action="reopened", body="no reference")
+    run(gh_repo, reopen)
+
+    assert gh_repo.closed == ["7", "7"]
+    assert len(gh_repo.comments) == 2
+    assert (
+        messages.marker(messages.REOPEN_STILL_CLOSED, SHA)
+        in gh_repo.comments[1]
+    )
+
+    # a redelivery of that same reopen doesn't repeat it
+    run(gh_repo, reopen)
+    assert len(gh_repo.comments) == 2
 
 
 def test_a_different_pr_cannot_ride_the_first_ones_claim():
@@ -423,7 +552,6 @@ def test_already_commented_matches_only_its_own_marker():
     )
 
 
-APPROVED_LABEL = "approved for development"
 DENY_LABEL = "NO pull requests please"
 
 

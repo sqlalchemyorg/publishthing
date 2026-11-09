@@ -45,8 +45,14 @@ def github_hook(
     ``repos`` maps "owner/name" to a config dict; one wsgi app serves
     every project, so a repo absent from this mapping is ignored
     entirely.  Recognized keys are "label", "review_label", "deny_label",
-    "approved_label", "exempt_maintainers", "exempt_users" and
-    "policy_url".
+    "approved_label", "exempt_maintainers", "exempt_users",
+    "approve_on_maintainer_reopen" and "policy_url".
+
+    With "approve_on_maintainer_reopen" (the default), a maintainer
+    reopening a pull request the gate would close counts as approval:
+    an unlabeled issue it references is claimed as though it had been
+    labeled, and otherwise the pull request gets the approved label.
+    Either way the maintainer is told what was done.
 
     ``close_pull_requests=False`` leaves the comment but doesn't close,
     which is the way to defang the gate from configuration alone if the
@@ -79,6 +85,7 @@ def github_hook(
         # reopens through on the maintainer exemption without ever
         # claiming its issue.
         author = pull_request["user"]["login"]
+        is_reopen = event.json_data["action"] == "reopened"
         sha = pull_request["head"]["sha"]
 
         gh_repo = thing.github_repo(event.repo_name)
@@ -136,6 +143,24 @@ def github_hook(
                 )
             return
 
+        approve_on_reopen = entry.get("approve_on_maintainer_reopen", True)
+        if approve_on_reopen and util.is_maintainer_reopen(
+            gh_repo, event, author
+        ):
+            _approve_on_reopen(
+                gh_repo,
+                request,
+                number,
+                result,
+                event.json_data["sender"]["login"],
+                sha,
+                label=label,
+                review_label=review_label,
+                deny_label=deny_label,
+                approved_label=approved_label,
+            )
+            return
+
         message = messages.close_message(
             result,
             label,
@@ -157,6 +182,16 @@ def github_hook(
                 number,
                 sha,
             )
+            # a reopen that changed nothing still gets a word, so the
+            # pull request isn't closed again silently.  skip it only if
+            # it's already the latest comment, i.e. a redelivery.
+            still_closed = messages.marker(messages.REOPEN_STILL_CLOSED, sha)
+            if is_reopen and not _last_comment_has(
+                gh_repo, number, still_closed
+            ):
+                gh_repo.publish_issue_comment(
+                    number, messages.reopen_still_closed_message(sha)
+                )
         else:
             # comment before closing: if the close fails we'd rather have
             # an explained open pull request than a silent closed one.
@@ -176,6 +211,83 @@ def _already_commented(
         if marker in (comment.get("body") or ""):
             return True
     return False
+
+
+def _last_comment_has(
+    gh_repo: github.GithubRepo, number: str, marker: str
+) -> bool:
+    last = None
+    for comment in gh_repo.get_issue_comments(number):
+        last = comment
+    return last is not None and marker in (last.get("body") or "")
+
+
+def _approve_on_reopen(
+    gh_repo: github.GithubRepo,
+    request: wsgi.WsgiRequest,
+    number: str,
+    result: util.GateResult,
+    sender: str,
+    sha: str,
+    label: str,
+    review_label: str,
+    deny_label: str,
+    approved_label: str,
+) -> None:
+    """Treat a maintainer's reopen as approval, and say so.
+
+    An open issue that simply lacks the label is claimed, the same as if
+    the maintainer had labeled it first.  Anything else -- no issue, a
+    closed one, one already in review or denied -- isn't something the
+    reopen can fix on the issue side, so the pull request gets the
+    approved label instead, which also keeps it open across later
+    close/reopen cycles.
+
+    """
+
+    if (
+        result.reason == util.CLOSE_ISSUE_UNLABELED
+        and result.issue is not None
+    ):
+        issue = str(result.issue)
+        gh_repo.add_issue_labels(issue, [review_label])
+        gh_repo.remove_issue_label(issue, label)
+        gh_repo.publish_issue_comment(
+            number,
+            messages.reopen_claimed_message(
+                result.issue, sender, label, review_label
+            ),
+        )
+        request.add_text(
+            "prgate: reopened by maintainer %s, claimed issue #%s for #%s",
+            sender,
+            issue,
+            number,
+        )
+        return
+
+    gh_repo.add_issue_labels(number, [approved_label])
+    # github redelivers webhooks; don't repeat the comment if it's
+    # already the latest one.
+    if not _last_comment_has(
+        gh_repo, number, messages.marker(messages.REOPEN_APPROVED, sha)
+    ):
+        gh_repo.publish_issue_comment(
+            number,
+            messages.reopen_approved_message(
+                result,
+                sender,
+                sha,
+                approved_label,
+                review_label=review_label,
+                deny_label=deny_label,
+            ),
+        )
+    request.add_text(
+        "prgate: reopened by maintainer %s, approved #%s",
+        sender,
+        number,
+    )
 
 
 def _holds_claim(

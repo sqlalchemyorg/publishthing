@@ -24,8 +24,9 @@ DEFAULT_DENY_LABEL = "NO pull requests please"
 # of anything else.  the escape hatch for the case the rules don't fit:
 # a doc fix worth taking, a contributor worth making an exception for.
 # note this can't pre-empt the first close, since the label can't exist
-# before the pull request does; the flow is that the gate closes it, a
-# maintainer labels it, and reopening it then passes.
+# before the pull request does; the flow is that the gate closes it and a
+# maintainer reopens it, which applies this label automatically (see
+# ``is_maintainer_reopen``).
 DEFAULT_APPROVED_LABEL = "approved for development"
 
 # reasons a pull request was allowed through
@@ -90,6 +91,30 @@ def pr_is_opened_or_reopened(event: github.GithubEvent) -> bool:
     """
 
     return bool(event.json_data["action"] in ("opened", "reopened"))
+
+
+def is_maintainer_reopen(
+    gh_repo: github.GithubRepo,
+    event: github.GithubEvent,
+    author: str,
+) -> bool:
+    """True if this is a maintainer reopening someone else's pull request.
+
+    Reopening a pull request the gate closed is a deliberate act, and
+    when a maintainer does it the gate treats it as approval rather than
+    closing it again.  An author reopening their own pull request isn't
+    reviewing anything, so that case doesn't count even for a maintainer.
+
+    """
+
+    if event.json_data["action"] != "reopened":
+        return False
+
+    sender = (event.json_data.get("sender") or {}).get("login")
+    if not sender or sender.lower() == author.lower():
+        return False
+
+    return user_has_write_permission(gh_repo, sender)
 
 
 def strip_noncontent(text: str) -> str:

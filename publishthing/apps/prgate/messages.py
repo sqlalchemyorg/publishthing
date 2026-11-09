@@ -27,6 +27,11 @@ MARKER_PREFIX = "<!-- prgate"
 CLAIM_MARKER_PREFIX = "<!-- prgate-claim"
 
 
+# marker reasons for comments that aren't a close
+REOPEN_APPROVED = "reopen_approved"
+REOPEN_STILL_CLOSED = "reopen_still_closed"
+
+
 def marker(reason: str, sha: str) -> str:
     return "%s:%s:%s -->" % (MARKER_PREFIX, reason, sha)
 
@@ -105,6 +110,109 @@ _ACCEPTED = (
     "request is abandoned, a maintainer can put **%(label)s** back on "
     "#%(issue)s to reopen it to others."
 )
+
+
+_REOPEN_CLAIMED = (
+    "@%(sender)s reopened this pull request, so I'm taking that as "
+    "maintainer approval for issue #%(issue)s: it's now marked "
+    "**%(review_label)s**, and this pull request holds the review for "
+    "it. If that wasn't the intent, close this pull request and put "
+    "**%(label)s** back on #%(issue)s if it should be open to others."
+)
+
+_REOPEN_APPROVED = (
+    "@%(sender)s reopened this pull request, so I'm taking that as a "
+    "maintainer override and have added the **%(approved_label)s** "
+    "label; it will stay open. %(detail)s If that wasn't the intent, "
+    "close this pull request and remove the label."
+)
+
+_REOPEN_DETAIL = {
+    util.CLOSE_NO_ISSUE: (
+        "It doesn't reference an issue, so no issue labels were changed."
+    ),
+    util.CLOSE_ISSUE_CLOSED: (
+        "It references #%(issue)s, which is closed, so no issue labels "
+        "were changed."
+    ),
+    util.CLOSE_ISSUE_IN_REVIEW: (
+        "Note that #%(issue)s is already marked **%(review_label)s**, "
+        "possibly for another pull request; its labels were left alone."
+    ),
+    util.CLOSE_ISSUE_DENIED: (
+        "Note that #%(issue)s is marked **%(deny_label)s**; its labels "
+        "were left alone."
+    ),
+}
+
+_REOPEN_STILL_CLOSED = (
+    "This pull request was reopened, but nothing that the gate checks "
+    "has changed since my earlier comment, so I'm closing it again. "
+    "The steps in that comment still apply."
+)
+
+
+def reopen_claimed_message(
+    issue: int, sender: str, label: str, review_label: str
+) -> str:
+    """Comment for a maintainer reopen that claimed an unlabeled issue.
+
+    Carries the claim marker, the same as ``accepted_message``.
+
+    """
+
+    return "\n\n".join(
+        [
+            claim_marker(issue),
+            _REOPEN_CLAIMED
+            % {
+                "sender": sender,
+                "issue": issue,
+                "label": label,
+                "review_label": review_label,
+            },
+        ]
+    )
+
+
+def reopen_approved_message(
+    result: util.GateResult,
+    sender: str,
+    sha: str,
+    approved_label: str,
+    review_label: str = util.DEFAULT_REVIEW_LABEL,
+    deny_label: str = util.DEFAULT_DENY_LABEL,
+) -> str:
+    """Comment for a maintainer reopen that applied the approved label."""
+
+    subs = {
+        "issue": result.issue,
+        "review_label": review_label,
+        "deny_label": deny_label,
+    }
+    detail = _REOPEN_DETAIL.get(
+        result.reason, _REOPEN_DETAIL[util.CLOSE_NO_ISSUE]
+    )
+    return "\n\n".join(
+        [
+            marker(REOPEN_APPROVED, sha),
+            _REOPEN_APPROVED
+            % {
+                "sender": sender,
+                "approved_label": approved_label,
+                "detail": detail % subs,
+            },
+        ]
+    )
+
+
+def reopen_still_closed_message(sha: str) -> str:
+    """Comment for a reopen that changed nothing, so the pull request
+    isn't closed again without a word."""
+
+    return "\n\n".join(
+        [marker(REOPEN_STILL_CLOSED, sha), _REOPEN_STILL_CLOSED]
+    )
 
 
 def accepted_message(issue: int, label: str, review_label: str) -> str:
